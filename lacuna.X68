@@ -44,7 +44,17 @@ START   ORG     $1000
         * repaint buffer on main screen
         move.b  #CMD_REPAINT, d0
         TRAP    #15
-
+        
+        JSR     PROCESS_CHARACTER_BITMAP
+        move.l  #100, -(sp)
+        move.l  #200, -(sp)
+        JSR     DRAW_CHARACTER
+        add.l  #8, sp
+        
+        * repaint buffer on main screen
+        move.b  #CMD_REPAINT, d0
+        TRAP    #15        
+        
         move.b  $9,d0
         TRAP    #15
 
@@ -72,16 +82,14 @@ SR_DRAW_CLIP_RECTANGLE:
         movem.l ALL_REGS, -(sp)         ; store the register values in stack
 
         move.l  BG_ImageData, a0
-        
-        move.l  52(sp), d3              ; top-left-x to d3
-        move.l  48(sp), d2              ; top-left-y to d2
-        
+                
         move.l  BG_Height, d2
         sub.l   48(sp), d2
         subi.l  #1, d2
         
         move.l  BG_WIDTH, d5
         
+        move.l  52(sp), d3              ; top-left-x to d3
         move.l  d3, d7
         add.l   d3, d7
         add.l   d3, d7
@@ -126,7 +134,74 @@ SR_DRAW_CLIP_RECTANGLE:
         RTS
 
 *-------------------
-* Subroutine: Copies the double buffer to the main screen
+* Subroutine : Draws the character at given offset
+* Parameteres: (LONG) top-left-x, (LONG) top-left-y (order to push onto stack)
+*              44(sp), 40(sp)
+*-------------------
+*-------------------
+* a0 : address of image data
+* d0 : trap code
+* d1 : trap code requirements
+* d2 : Y coordinate
+* d3 : X coordinate
+* d4 : byte offset of current row in image data
+* d5 : number of bytes per row
+* d6 : pixel offset
+* d7 : offset of the number of bytes in a row
+*-------------------
+DRAW_CHARACTER:
+        movem.l ALL_REGS, -(sp)         ; store the register values in stack
+
+        move.l  Char_ImageData, a0
+                
+        move.l  Char_Height, d2
+        subi.l  #1, d2
+        
+        move.l  Char_Width, d5
+        
+        move.l  d5, d6
+        mulu    d2, d6
+        move.l  44(sp), d3              ; top-left-x to d3
+        move.l  40(sp), d2              ; top-left-y to d2
+        move.l  d3, d4
+        add.l   Char_ActualWidth, d4
+        move.l  d2, d7
+        add.l   Char_ActualWidth, d7
+        add.l   d5, d5                  
+        
+    CONTINUE_CHAR_ROW:
+        clr.l   d1
+        
+        move.b  (a0, d6.l), d1          ; #$000000BB
+        swap    d1                      ; #$00BB0000
+        move.b  1(a0, d6.l), d1         ; #$00BB00GG
+        lsl.w   #8, d1                  ; #$00BBGG00
+        move.b  2(a0, d6.l), d1         ; #$00BBGGRR
+        
+        move.l  #CMD_PEN_COLOR, d0
+        TRAP    #15
+        
+        move.l  d3, d1
+        move.l  #CMD_DRAW_PIXEL, d0
+        TRAP    #15
+        
+        addi.l  #1, d3                  ; increment X coordinate
+        addi.l  #3, d6
+        
+        cmp.l   d4, d3
+        blt     CONTINUE_CHAR_ROW
+        
+        sub.l   d5, d6                  ; update row pointer to to previous row (current = current - NumBytesPerRow)
+        move.l  44(sp), d3              ; reset X coordinate
+        addi.l  #1, d2
+        cmp.l   d7, d2                  ; char width = char height
+        blt     CONTINUE_CHAR_ROW
+        
+        movem.l (sp)+, ALL_REGS
+        RTS
+
+*-------------------
+* Subroutine: Processes the header of the background image bitmap and saves the required data in memory
 *-------------------
 PROCESS_BACKGROUND_BITMAP:
 
@@ -148,6 +223,31 @@ PROCESS_BACKGROUND_BITMAP:
         lsl.l   #2, d5                  ; d5 = d5 * 4
         move.l  d5, BG_Width
         RTS
+
+*-------------------
+* Subroutine: Processes the header of the character image bitmap and saves the required data in memory
+*-------------------
+PROCESS_CHARACTER_BITMAP:
+
+        move.l  CharImageDataOffset, d5
+        JSR     SR_SWAP_LONG
+        lea     CharBitmapData, a0
+        adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
+        move.l  a0, Char_ImageData
+        
+        move.l  CharImageHeight, d5
+        JSR     SR_SWAP_LONG
+        move.l  d5, Char_Height
+        
+        move.l  CharImageWidth, d5
+        JSR     SR_SWAP_LONG        
+        mulu    #BitsPerPixel, d5
+        addi.l  #31, d5
+        lsr.l   #5, d5                  ; d5 = d5 / 32
+        lsl.l   #2, d5                  ; d5 = d5 * 4
+        move.l  d5, Char_Width
+        RTS
+
         
 *-------------------
 * Subroutine: Copies the double buffer to the main screen
@@ -224,6 +324,10 @@ BitsPerPixel        EQU     24                   ; WORD
 *-------------------
 LifeSaver02         ds.l    0
 CharBitmapData      INCBIN  "images/alien.bmp"
+Char_ImageData      ds.l    1
+Char_Height         ds.l    1
+Char_Width          ds.l    1   ; corresponds to number of bytes per row
+Char_ActualWidth    dc.l    32
 CharImageDataOffset EQU     (CharBitmapData+10)      ; LONG
 CharImageWidth      EQU     (CharImageDataOffset+8)  ; LONG
 CharImageHeight     EQU     (CharImageWidth+4)       ; LONG

@@ -32,6 +32,7 @@ START   ORG     $1000
         move.b  #CMD_DBL_BUFFER, d0
         TRAP    #15 
         
+        JSR     PROCESS_BACKGROUND_BITMAP
         * draw background in buffer
         move.l  #0, -(sp)
         move.l  #0, -(sp)
@@ -70,45 +71,16 @@ SR_DRAW_CLIP_RECTANGLE:
 
         movem.l ALL_REGS, -(sp)         ; store the register values in stack
 
-    *-------------------
-    * Reading the bitmap file header
-    * Note: Data in the file header is stored in little endian, thus it needs to be swapped to be used in 68k which is a big endian procesor
-    *-------------------
-        move.l  ImageDataOffset, d5
-        JSR     SR_SWAP_LONG
-        lea     BitmapData, a0
-        adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
+        move.l  BG_ImageData, a0
         
         move.l  52(sp), d3              ; top-left-x to d3
         move.l  48(sp), d2              ; top-left-y to d2
-
-        move.l  BitsPerPixel, d5
-        JSR     SR_SWAP_LONG
-        move.l  d5, d7                  ; required for calculatiung the number of garbage bytes at the end of each row
         
-        move.l  ImageHeight, d5
-        JSR     SR_SWAP_LONG
-        move.l  d5, d2
-        
-    *-------------------
-    * Image data in BMP is inverted 
-    * i.e. the last row of data corresponds to the first row of the actual image
-    * where Row[y] = (ImageHeight - y - 1) // for Row[0...ImageHeight-1]
-    *-------------------
+        move.l  BG_Height, d2
         sub.l   48(sp), d2
         subi.l  #1, d2
         
-    *-------------------
-    * BMP image data  have garbage bytes at the end of each row
-    * Number of bytes per row (incl. garbage) = Math.floor((BitsPerPixel*ImageWidth + 31)/32) * 4
-    *-------------------
-        move.l  ImageWidth, d5
-        JSR     SR_SWAP_LONG        
-        mulu    d5, d7
-        addi.l  #31, d7
-        lsr.l   #5, d7                  ; d7 = d7 / 32
-        lsl.l   #2, d7                  ; d7 = d7 * 4
-        move.l  d7, d5
+        move.l  BG_WIDTH, d5
         
         move.l  d3, d7
         add.l   d3, d7
@@ -153,10 +125,40 @@ SR_DRAW_CLIP_RECTANGLE:
         movem.l (sp)+, ALL_REGS
         RTS
 
+*-------------------
+* Subroutine: Copies the double buffer to the main screen
+*-------------------
+PROCESS_BACKGROUND_BITMAP:
+
+        move.l  ImageDataOffset, d5
+        JSR     SR_SWAP_LONG
+        lea     BitmapData, a0
+        adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
+        move.l  a0, BG_ImageData
+        
+        move.l  ImageHeight, d5
+        JSR     SR_SWAP_LONG
+        move.l  d5, BG_Height
+        
+        move.l  ImageWidth, d5
+        JSR     SR_SWAP_LONG        
+        mulu    #BitsPerPixel, d5
+        addi.l  #31, d5
+        lsr.l   #5, d5                  ; d5 = d5 / 32
+        lsl.l   #2, d5                  ; d5 = d5 * 4
+        move.l  d5, BG_Width
+        RTS
         
 *-------------------
+* Subroutine: Copies the double buffer to the main screen
+*-------------------
+REPAINT:
+        move.b  #CMD_REPAINT, d0
+        TRAP    #15
+        RTS
+
+*-------------------
 * Subroutine: Swaps the bytes of the lower word in d5
-* Uses      : d5, d6 
 *-------------------
 SR_SWAP_WORD:
         movem.l d6, -(sp)
@@ -171,7 +173,6 @@ SR_SWAP_WORD:
         
 *-------------------
 * Subroutine: Swaps the bytes of the long word in d5
-* Uses      : d5, d6 
 *-------------------
 SR_SWAP_LONG:
         JSR     SR_SWAP_WORD
@@ -204,18 +205,29 @@ CMD_REPAINT         EQU     94
 
 DBL_BUFFER_ON       EQU     17
 DBL_BUFFER_OFF      EQU     16
+
 *-------------------
-* Bitmap file descriptors
+* Background Bitmap file descriptors
 *-------------------
 LifeSaver01         ds.l    0
 BitmapData          INCBIN  "images/inside-a-factory.bmp"
+BG_ImageData        ds.l    1
+BG_Height           ds.l    1
+BG_Width            ds.l    1   ; corresponds to number of bytes per row
 ImageDataOffset     EQU     (BitmapData+10)      ; LONG
 ImageWidth          EQU     (ImageDataOffset+8)  ; LONG
 ImageHeight         EQU     (ImageWidth+4)       ; LONG
-BitsPerPixel        EQU     (ImageHeight+6)      ; WORD
-ImageSize           EQU     (BitsPerPixel+6)     ; LONG
-NumOfColors         EQU     (ImageSize+12)       ; LONG
+BitsPerPixel        EQU     24                   ; WORD
 
+*-------------------
+* Character Bitmap file descriptors
+*-------------------
+LifeSaver02         ds.l    0
+CharBitmapData      INCBIN  "images/alien.bmp"
+CharImageDataOffset EQU     (CharBitmapData+10)      ; LONG
+CharImageWidth      EQU     (CharImageDataOffset+8)  ; LONG
+CharImageHeight     EQU     (CharImageWidth+4)       ; LONG
+        
         END     START
         
 

@@ -46,21 +46,62 @@ START   ORG     $1000
         move.b  #CMD_REPAINT, d0
         TRAP    #15
         
-        JSR     PROCESS_CHARACTER_BITMAP
         
-        move.l  #100, d4
-        move.l  #200, d5
-        move.l  #232, d6
-* (d4, d5) == (character.x, character.y)        
+        JSR     PROCESS_CHARACTER_BITMAP
+        move.l  #Char_StartX, d4
+        move.l  #Char_StartY, d5
+        move.l  #Char_StartY+32, d7
+        
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)
+        JSR     DRAW_CHARACTER
+        add.l   #8, sp        
+
+        * repaint buffer on main screen
+        move.b  #CMD_REPAINT, d0
+        TRAP    #15
+        
+* (d4, d5) == (character.x, character.y)
 GAME_LOOP:
+        move.l  #KEY_COMBO, d1
+        move.b  #CMD_KEY_DOWN_EVENT, d0
+        TRAP    #15
+        clr.l   d6  ; total x velocity for this frame        
+    *move.l  #$0000FF00, d1
+    CHECK_RIGHT_KEY:        
+        andi.b  #$FF, d1
+        beq     CHECK_LEFT_KEY
+        addi.b  #Char_XVelocity, d6
+
+    CHECK_LEFT_KEY:
+        andi.w  #$FF00, d1
+        beq     UPDATE_WORLD
+        addi.l  #Char_NegXVelocity, d6
+
+    UPDATE_WORLD:
+        bpl     MOVE_FORWARD
+        move.l  d4, d1
+        add.l   Char_ActualWidth, d1
+        move.l  d1, -12(sp)
+        move.l  d7, -16(sp)
+        add.l   d6, d1
+        move.l  d1, -(sp)
+        move.l  d5, -(sp)
+        sub.l   #8, sp
+        JSR     SR_DRAW_CLIP_RECTANGLE
+        add.l   #16, sp
+        add.l   d6, d4
+        bra     REDRAW_CHARACTER        
+    MOVE_FORWARD:
         move.l  d4, -(sp)
         move.l  d5, -(sp)        
-        addi.w  #Char_XVelocity, d4
+        add.l   d6, d4
         move.l  d4, -(sp)
-        move.l  d6, -(sp)
+        move.l  d7, -(sp)
         JSR     SR_DRAW_CLIP_RECTANGLE
         add.l   #16, sp
         
+    REDRAW_CHARACTER:
         move.l  d4, -(sp)
         move.l  d5, -(sp)
         JSR     DRAW_CHARACTER
@@ -70,8 +111,9 @@ GAME_LOOP:
         move.b  #CMD_REPAINT, d0
         TRAP    #15
         
-        cmp.w   #Char_XMAX, d4
-        blt     GAME_LOOP
+        *cmp.w   #Char_XMAX, d4
+        *blt     GAME_LOOP
+        bra GAME_LOOP
         
         move.b  $9,d0
         TRAP    #15
@@ -320,6 +362,7 @@ CMD_CLEAR_SCREEN    EQU     11
 CMD_DRAW_STRING     EQU     95
 CMD_DBL_BUFFER      EQU     92
 CMD_REPAINT         EQU     94
+CMD_KEY_DOWN_EVENT  EQU     19
 
 DBL_BUFFER_ON       EQU     17
 DBL_BUFFER_OFF      EQU     16
@@ -331,6 +374,7 @@ KEY_LEFT_ARROW      EQU     $25
 KEY_UP_ARROW        EQU     $26
 KEY_RIGHT_ARROW     EQU     $27
 KEY_SPACEBAR        EQU     $20
+KEY_COMBO           EQU     $2527
 
 *-------------------
 * Background Bitmap file descriptors
@@ -356,8 +400,11 @@ CharBitmapData      INCBIN  "images/alien.bmp"
 CharImageDataOffset EQU     (CharBitmapData+10)      ; LONG
 CharImageWidth      EQU     (CharImageDataOffset+8)  ; LONG
 CharImageHeight     EQU     (CharImageWidth+4)       ; LONG
+Char_StartX         EQU     100
+Char_StartY         EQU     400
 Char_XMAX           EQU     (STAGE_WIDTH-32)
 Char_XVelocity      EQU     4
+Char_NegXVelocity   EQU     -4
 
 Char_ImageData      ds.l    1
 Char_Height         ds.l    1
@@ -373,6 +420,7 @@ CharacterTrailRedraw    ds.l    2
         
 
         
+
 
 
 

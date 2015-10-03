@@ -5,20 +5,21 @@
 * Description   : Interactive Game
 *-----------------------------------------------------------
 
-ALL_REGS            REG     D0-D7/A0
-        
+ALL_REGS            REG     D0-D7/A0-A6
+ALL_BMP_DRAW_REGS   REG     D0-D7/A0
 *-------------------
 * MAIN
 *-------------------
 START   ORG     $1000
 
         * resize output window 
-        clr.l   d1
         move.w  #STAGE_WIDTH, d1
         swap    d1
         move.w  #STAGE_HEIGHT, d1
         move.b  #CMD_OUTPUT_RES, d0
         TRAP    #15
+        
+        * TODO: add start button
         
         * display loading text
         lea     LoadingText, a1
@@ -46,14 +47,31 @@ START   ORG     $1000
         TRAP    #15
         
         JSR     PROCESS_CHARACTER_BITMAP
-        move.l  #100, -(sp)
-        move.l  #200, -(sp)
+        
+        move.l  #100, d4
+        move.l  #200, d5
+        move.l  #232, d6
+* (d4, d5) == (character.x, character.y)        
+GAME_LOOP:
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)        
+        addi.w  #Char_XVelocity, d4
+        move.l  d4, -(sp)
+        move.l  d6, -(sp)
+        JSR     SR_DRAW_CLIP_RECTANGLE
+        add.l   #16, sp
+        
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)
         JSR     DRAW_CHARACTER
-        add.l  #8, sp
+        add.l   #8, sp        
         
         * repaint buffer on main screen
         move.b  #CMD_REPAINT, d0
-        TRAP    #15        
+        TRAP    #15
+        
+        cmp.w   #Char_XMAX, d4
+        blt     GAME_LOOP
         
         move.b  $9,d0
         TRAP    #15
@@ -79,7 +97,7 @@ START   ORG     $1000
 *-------------------
 SR_DRAW_CLIP_RECTANGLE:
 
-        movem.l ALL_REGS, -(sp)         ; store the register values in stack
+        movem.l ALL_BMP_DRAW_REGS, -(sp)         ; store the register values in stack
 
         move.l  BG_ImageData, a0
                 
@@ -130,7 +148,7 @@ SR_DRAW_CLIP_RECTANGLE:
         cmp.l   40(sp), d2
         blt     CONTINUE_ROW
 
-        movem.l (sp)+, ALL_REGS
+        movem.l (sp)+, ALL_BMP_DRAW_REGS
         RTS
 
 *-------------------
@@ -150,7 +168,7 @@ SR_DRAW_CLIP_RECTANGLE:
 * d7 : offset of the number of bytes in a row
 *-------------------
 DRAW_CHARACTER:
-        movem.l ALL_REGS, -(sp)         ; store the register values in stack
+        movem.l ALL_BMP_DRAW_REGS, -(sp)         ; store the register values in stack
 
         move.l  Char_ImageData, a0
                 
@@ -197,7 +215,7 @@ DRAW_CHARACTER:
         cmp.l   d7, d2                  ; char width = char height
         blt     CONTINUE_CHAR_ROW
         
-        movem.l (sp)+, ALL_REGS
+        movem.l (sp)+, ALL_BMP_DRAW_REGS
         RTS
 
 *-------------------
@@ -307,35 +325,55 @@ DBL_BUFFER_ON       EQU     17
 DBL_BUFFER_OFF      EQU     16
 
 *-------------------
+* Key codes
+*-------------------
+KEY_LEFT_ARROW      EQU     $25
+KEY_UP_ARROW        EQU     $26
+KEY_RIGHT_ARROW     EQU     $27
+KEY_SPACEBAR        EQU     $20
+
+*-------------------
 * Background Bitmap file descriptors
 *-------------------
 LifeSaver01         ds.l    0
 BitmapData          INCBIN  "images/inside-a-factory.bmp"
-BG_ImageData        ds.l    1
-BG_Height           ds.l    1
-BG_Width            ds.l    1   ; corresponds to number of bytes per row
+
 ImageDataOffset     EQU     (BitmapData+10)      ; LONG
 ImageWidth          EQU     (ImageDataOffset+8)  ; LONG
 ImageHeight         EQU     (ImageWidth+4)       ; LONG
 BitsPerPixel        EQU     24                   ; WORD
+
+BG_ImageData        ds.l    1
+BG_Height           ds.l    1
+BG_Width            ds.l    1   ; corresponds to number of bytes per row
 
 *-------------------
 * Character Bitmap file descriptors
 *-------------------
 LifeSaver02         ds.l    0
 CharBitmapData      INCBIN  "images/alien.bmp"
+
+CharImageDataOffset EQU     (CharBitmapData+10)      ; LONG
+CharImageWidth      EQU     (CharImageDataOffset+8)  ; LONG
+CharImageHeight     EQU     (CharImageWidth+4)       ; LONG
+Char_XMAX           EQU     (STAGE_WIDTH-32)
+Char_XVelocity      EQU     4
+
 Char_ImageData      ds.l    1
 Char_Height         ds.l    1
 Char_Width          ds.l    1   ; corresponds to number of bytes per row
 Char_ActualWidth    dc.l    32
-CharImageDataOffset EQU     (CharBitmapData+10)      ; LONG
-CharImageWidth      EQU     (CharImageDataOffset+8)  ; LONG
-CharImageHeight     EQU     (CharImageWidth+4)       ; LONG
+
+*-------------------
+* Graphics pipeline
+*-------------------
+CharacterTrailRedraw    ds.l    2
         
         END     START
         
 
         
+
 
 
 

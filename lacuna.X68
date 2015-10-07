@@ -76,7 +76,19 @@ START   ORG     $1000
 * d7: character.y + character.height
 GAME_LOOP:
         JSR     GET_TIME_DIFF
+        *BRA     CALC_DISTANCE
+        
+        move.l  #KEY_COMBO, d1
+        move.b  #CMD_KEY_DOWN_EVENT, d0
+        TRAP    #15
+        
+    CHECK_RIGHT_KEY:
+        andi.b  #$FF, d1
+        beq     GAME_LOOP
+
+    CALC_DISTANCE:        
         mulu    #Char_XVelocity, d2
+        asr.l   #8, d2
     UPDATE_WORLD:
     MOVE_FORWARD:
         move.l  d4, -(sp)
@@ -115,6 +127,7 @@ GET_TIME_DIFF:
         move.l  d1, d3      ; current time to previous time
         sub.l   d1, d2      ; subtract current time from previous time
         neg.l   d2          ; get absolute value of time difference
+        *move.l  #30, d2
         RTS
 
 *-------------------
@@ -400,8 +413,7 @@ CharImageHeight     EQU     (CharImageWidth+4)       ; LONG
 Char_StartX         EQU     100
 Char_StartY         EQU     400
 Char_XMAX           EQU     (STAGE_WIDTH-32)
-Char_XVelocity      EQU     1
-Char_NegXVelocity   EQU     -1
+Char_XVelocity      EQU     1000
 
 Char_ImageData      ds.l    1
 Char_Height         ds.l    1

@@ -61,41 +61,27 @@ START   ORG     $1000
         move.b  #CMD_REPAINT, d0
         TRAP    #15
         
-* (d4, d5) == (character.x, character.y)
-GAME_LOOP:
-        move.l  #KEY_COMBO, d1
-        move.b  #CMD_KEY_DOWN_EVENT, d0
+        move.b  #CMD_GET_TIME, d0
         TRAP    #15
-        clr.l   d6  ; total x velocity for this frame        
-    *move.l  #$0000FF00, d1
-    CHECK_RIGHT_KEY:        
-        andi.b  #$FF, d1
-        beq     CHECK_LEFT_KEY
-        addi.b  #Char_XVelocity, d6
-
-    CHECK_LEFT_KEY:
-        andi.w  #$FF00, d1
-        beq     UPDATE_WORLD
-        addi.l  #Char_NegXVelocity, d6
-
+        move.l  d0, d2
+        
+        JSR     GET_TIME_DIFF
+* d0: trap codes
+* d1: trap code requirements
+* d2: time difference
+* d3: previous time
+* d4: character.x
+* d5: character.y
+* d6: 
+* d7: character.y + character.height
+GAME_LOOP:
+        JSR     GET_TIME_DIFF
+        mulu    #Char_XVelocity, d2
     UPDATE_WORLD:
-        bpl     MOVE_FORWARD
-        move.l  d4, d1
-        add.l   Char_ActualWidth, d1
-        move.l  d1, -12(sp)
-        move.l  d7, -16(sp)
-        add.l   d6, d1
-        move.l  d1, -(sp)
-        move.l  d5, -(sp)
-        sub.l   #8, sp
-        JSR     SR_DRAW_CLIP_RECTANGLE
-        add.l   #16, sp
-        add.l   d6, d4
-        bra     REDRAW_CHARACTER        
     MOVE_FORWARD:
         move.l  d4, -(sp)
         move.l  d5, -(sp)        
-        add.l   d6, d4
+        add.l   d2, d4
         move.l  d4, -(sp)
         move.l  d7, -(sp)
         JSR     SR_DRAW_CLIP_RECTANGLE
@@ -120,6 +106,16 @@ GAME_LOOP:
 
         STOP #$F000
         
+
+GET_TIME_DIFF:
+        move.b  #CMD_GET_TIME, d0
+        TRAP    #15
+        
+        move.l  d3, d2      ; previous time to d2
+        move.l  d1, d3      ; current time to previous time
+        sub.l   d1, d2      ; subtract current time from previous time
+        neg.l   d2          ; get absolute value of time difference
+        RTS
 
 *-------------------
 * Subroutine : Draws the specified clipping rectangle
@@ -363,6 +359,7 @@ CMD_DRAW_STRING     EQU     95
 CMD_DBL_BUFFER      EQU     92
 CMD_REPAINT         EQU     94
 CMD_KEY_DOWN_EVENT  EQU     19
+CMD_GET_TIME        EQU     8
 
 DBL_BUFFER_ON       EQU     17
 DBL_BUFFER_OFF      EQU     16
@@ -403,8 +400,8 @@ CharImageHeight     EQU     (CharImageWidth+4)       ; LONG
 Char_StartX         EQU     100
 Char_StartY         EQU     400
 Char_XMAX           EQU     (STAGE_WIDTH-32)
-Char_XVelocity      EQU     4
-Char_NegXVelocity   EQU     -4
+Char_XVelocity      EQU     1
+Char_NegXVelocity   EQU     -1
 
 Char_ImageData      ds.l    1
 Char_Height         ds.l    1
@@ -420,6 +417,7 @@ CharacterTrailRedraw    ds.l    2
         
 
         
+
 
 
 

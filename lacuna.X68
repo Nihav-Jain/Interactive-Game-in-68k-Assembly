@@ -76,21 +76,42 @@ START   ORG     $1000
 * d7: character.y + character.height
 GAME_LOOP:
         JSR     GET_TIME_DIFF
-        *BRA     CALC_DISTANCE
-        
+
+        clr.l   d6
         move.l  #KEY_COMBO, d1
         move.b  #CMD_KEY_DOWN_EVENT, d0
         TRAP    #15
         
     CHECK_RIGHT_KEY:
         andi.b  #$FF, d1
-        beq     GAME_LOOP
+        beq     CHECK_LEFT_KEY
+        addi.l  #Char_XVelocity, d6        
+    CHECK_LEFT_KEY:
+        andi.w  #$FF00, d1
+        beq     MOVE_RIGHT
+        addi.l  #-Char_XVelocity, d6
+        bpl     MOVE_RIGHT
 
-    CALC_DISTANCE:        
-        mulu    #Char_XVelocity, d2
+    MOVE_LEFT:
+        muls    d6, d2
         asr.l   #8, d2
-    UPDATE_WORLD:
-    MOVE_FORWARD:
+        
+        move.l  d4, d1
+        add.l   Char_ActualWidth, d1
+        move.l  d1, -12(sp)
+        move.l  d7, -16(sp)
+        add.l   d2, d1
+        move.l  d1, -(sp)
+        move.l  d5, -(sp)
+        sub.l   #8, sp
+        JSR     SR_DRAW_CLIP_RECTANGLE
+        add.l   #16, sp
+        add.l   d2, d4
+        bra     REDRAW_CHARACTER  
+    MOVE_RIGHT:
+        mulu    d6, d2
+        asr.l   #8, d2
+        
         move.l  d4, -(sp)
         move.l  d5, -(sp)        
         add.l   d2, d4
@@ -127,7 +148,7 @@ GET_TIME_DIFF:
         move.l  d1, d3      ; current time to previous time
         sub.l   d1, d2      ; subtract current time from previous time
         neg.l   d2          ; get absolute value of time difference
-        *move.l  #30, d2
+*        move.l  #30, d2
         RTS
 
 *-------------------

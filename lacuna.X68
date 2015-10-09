@@ -186,8 +186,8 @@ APPLY_GRAVITY:
         JSR     IS_FALLING
         cmpi.b  #1, IsFalling
         beq     CHARACTER_IS_FALLING
-
-        move.l  (sp)+, d5
+        move.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
+        add.l   #4, sp
         RTS
     CHARACTER_IS_FALLING:
         move.l  d5, d7

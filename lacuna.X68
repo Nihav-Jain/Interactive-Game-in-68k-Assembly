@@ -89,24 +89,24 @@ GAME_LOOP:
     CHECK_LEFT_KEY:
         andi.w  #$FF00, d1
         beq     MOVE_RIGHT
-        addi.l  #-Char_XVelocity, d6
-        bpl     MOVE_RIGHT
+        addi.l  #Char_XVelocity, d6
+        beq     GAME_LOOP
 
     MOVE_LEFT:
-        muls    d6, d2
+        mulu    d6, d2
         asr.l   #8, d2
         
         move.l  d4, d1
         add.l   Char_ActualWidth, d1
         move.l  d1, -12(sp)
         move.l  d7, -16(sp)
-        add.l   d2, d1
+        sub.l   d2, d1
         move.l  d1, -(sp)
         move.l  d5, -(sp)
         sub.l   #8, sp
         JSR     SR_DRAW_CLIP_RECTANGLE
         add.l   #16, sp
-        add.l   d2, d4
+        sub.l   d2, d4
         bra     REDRAW_CHARACTER  
     MOVE_RIGHT:
         mulu    d6, d2
@@ -440,6 +440,13 @@ Char_ImageData      ds.l    1
 Char_Height         ds.l    1
 Char_Width          ds.l    1   ; corresponds to number of bytes per row
 Char_ActualWidth    dc.l    32
+
+*-------------------
+* Physics
+*-------------------
+MAP_ROWS            EQU     20
+MAP_COLS            EQU     15
+Map                 ds.w    300
 
 *-------------------
 * Graphics pipeline

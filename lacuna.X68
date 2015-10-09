@@ -73,33 +73,38 @@ START   ORG     $1000
 * d4: character.x
 * d5: character.y
 * d6: net x-velocity
-* d7: 
+* d7: copy of d2
 GAME_LOOP:
         move.l  d4, Char_OldX
         move.l  d5, Char_OldY
         
         JSR     GET_TIME_DIFF
-        JSR     APPLY_GRAVITY
-        
+        move.l  d2, CurTimeDiff
     GET_INPUT:
         clr.l   d6
-        clr.l   d7
         move.l  #KEY_COMBO, d1
         move.b  #CMD_KEY_DOWN_EVENT, d0
         TRAP    #15
-    
-*    CHECK_UP_KEY:
-*        andi.l  #$00FF0000, d1
-*        beq     JUMP
+    CHECK_UP_KEY:
+        move.l  d1, d7
+        andi.l  #$00FF0000, d1
+        beq     CHECK_RIGHT_KEY
+    JUMP:
+        JSR     IS_FALLING
+        cmpi.b  #1, IsFalling
+        beq     REDRAW_BACKGROUND
+        move.l  #2000, Char_YVelocity
+        move.b  #1, IsJumping
     CHECK_RIGHT_KEY:
+        move.l  d7, d1
         andi.b  #$FF, d1                ; copy in d7
         beq     CHECK_LEFT_KEY
         addi.l  #Char_XVelocity, d6        
     CHECK_LEFT_KEY:
+        move.l  d7, d1
         andi.w  #$FF00, d1
         beq     MOVE_RIGHT
         addi.l  #Char_XVelocity, d6
-*    JUMP:
         
     MOVE_LEFT:
         mulu    d6, d2
@@ -120,6 +125,8 @@ GAME_LOOP:
         add.l   d2, d4
         
     REDRAW_BACKGROUND:
+        move.l  CurTimeDiff, d2
+        JSR     APPLY_GRAVITY
         move.l  Char_OldX, -(sp)
         move.l  Char_OldY, -(sp)
         add.l   #GRID_WIDTH, Char_OldX
@@ -187,15 +194,30 @@ APPLY_GRAVITY:
         mulu    d2, d3
 
         mulu    #(GRAVITY/2), d2
+        cmpi.b  #1, IsJumping
+        beq     DECREASE_SPEED
         add.l   d2, Char_YVelocity
-
+        bra     CALC_DISTANCE        
+    DECREASE_SPEED:
+        sub.l   d2, Char_YVelocity
+    CALC_DISTANCE:    
         mulu    d2, d2
         lsr.l   #8, d2
         lsr.l   #4, d2
         add.l   d3, d2
         asr.l   #8, d2
+        
+        cmpi.b  #0, IsJumping
+        beq     ADD_DISTANCE
+        sub.l   d2, d5
+        cmp.l   #0, Char_YVelocity
+        bgt     CHECK_IF_FALLING
+        move.b  #0, IsJumping
+        bra     CHECK_IF_FALLING
+    ADD_DISTANCE:
         add.l   d2, d5
         
+    CHECK_IF_FALLING:
         move.l  (sp)+, d3
         move.l  (sp)+, d2
 
@@ -215,20 +237,20 @@ APPLY_GRAVITY:
 IS_FALLING:
         move.b  #0, IsFalling
         cmpi.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
-        bgt     NOT_FALLING
+        bge     NOT_FALLING
         move.b  #1, IsFalling
     NOT_FALLING:
         RTS
 
 GET_TIME_DIFF:
-        move.b  #CMD_GET_TIME, d0
-        TRAP    #15
-        
-        move.l  d3, d2      ; previous time to d2
-        move.l  d1, d3      ; current time to previous time
-        sub.l   d1, d2      ; subtract current time from previous time
-        neg.l   d2          ; get absolute value of time difference
-*        move.l  #300, d2
+*        move.b  #CMD_GET_TIME, d0
+*        TRAP    #15
+*        
+*        move.l  d3, d2      ; previous time to d2
+*        move.l  d1, d3      ; current time to previous time
+*        sub.l   d1, d2      ; subtract current time from previous time
+*        neg.l   d2          ; get absolute value of time difference
+        move.l  #1, d2
         RTS
         
 *********************************************************************
@@ -540,6 +562,7 @@ MAP_ROWS            EQU     20
 MAP_COLS            EQU     15
 GRAVITY             EQU     100
 
+CurTimeDiff         dc.l    0
 CanMove             dc.b    0
 IsFalling           dc.b    0
 IsJumping           dc.b    0

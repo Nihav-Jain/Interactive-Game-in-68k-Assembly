@@ -95,6 +95,10 @@ GAME_LOOP:
     MOVE_LEFT:
         mulu    d6, d2
         asr.l   #8, d2
+
+        JSR     CAN_MOVE_LEFT
+        cmpi.b  #0, CanMove
+        beq     GAME_LOOP
         
         move.l  d4, d1
         add.l   Char_ActualWidth, d1
@@ -111,6 +115,10 @@ GAME_LOOP:
     MOVE_RIGHT:
         mulu    d6, d2
         asr.l   #8, d2
+
+        JSR     CAN_MOVE_RIGHT
+        cmpi.b  #0, CanMove
+        beq     GAME_LOOP
         
         move.l  d4, -(sp)
         move.l  d5, -(sp)        
@@ -139,6 +147,28 @@ GAME_LOOP:
 
         STOP #$F000
         
+
+CAN_MOVE_LEFT:
+        movem.l d4, -(sp)       ; TODO: compare with adding / subtracting the value back
+        move.b  #0, CanMove
+        sub.l   d2, d4
+        cmpi.l  #0, d4
+        blt     RETURN_CAN_MOVE_LEFT
+        move.b  #1, CanMove
+    RETURN_CAN_MOVE_LEFT:
+        movem.l (sp)+, d4
+        RTS
+        
+CAN_MOVE_RIGHT:
+        movem.l d4, -(sp)
+        move.b  #0, CanMove
+        add.l   d2, d4
+        cmpi.l  #(STAGE_WIDTH-GRID_WIDTH), d4
+        bgt     RETURN_CAN_MOVE_RIGHT
+        move.b  #1, CanMove
+    RETURN_CAN_MOVE_RIGHT:
+        movem.l (sp)+, d4
+        RTS
 
 GET_TIME_DIFF:
         move.b  #CMD_GET_TIME, d0
@@ -380,6 +410,8 @@ SR_SWAP_LONG:
 *-------------------
 STAGE_WIDTH         EQU     640
 STAGE_HEIGHT        EQU     480
+GRID_WIDTH          EQU     32
+GRID_HEIGHT         EQU     32
 LoadingText         dc.b    'Loading...', 0
 
 *-------------------
@@ -446,7 +478,8 @@ Char_ActualWidth    dc.l    32
 *-------------------
 MAP_ROWS            EQU     20
 MAP_COLS            EQU     15
-Map                 ds.w    300
+*Map                 ds.w    300
+CanMove             dc.b    0
 
 *-------------------
 * Graphics pipeline

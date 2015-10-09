@@ -72,8 +72,8 @@ START   ORG     $1000
 * d3: previous time
 * d4: character.x
 * d5: character.y
-* d6: 
-* d7: character.y + character.height
+* d6: net x-velocity
+* d7: 
 GAME_LOOP:
         move.l  d4, Char_OldX
         move.l  d5, Char_OldY
@@ -83,19 +83,24 @@ GAME_LOOP:
         
     GET_INPUT:
         clr.l   d6
+        clr.l   d7
         move.l  #KEY_COMBO, d1
         move.b  #CMD_KEY_DOWN_EVENT, d0
         TRAP    #15
-        
+    
+*    CHECK_UP_KEY:
+*        andi.l  #$00FF0000, d1
+*        beq     JUMP
     CHECK_RIGHT_KEY:
-        andi.b  #$FF, d1
+        andi.b  #$FF, d1                ; copy in d7
         beq     CHECK_LEFT_KEY
         addi.l  #Char_XVelocity, d6        
     CHECK_LEFT_KEY:
         andi.w  #$FF00, d1
         beq     MOVE_RIGHT
         addi.l  #Char_XVelocity, d6
-
+*    JUMP:
+        
     MOVE_LEFT:
         mulu    d6, d2
         asr.l   #8, d2
@@ -121,14 +126,14 @@ GAME_LOOP:
         add.l   #GRID_HEIGHT, Char_OldY
         move.l  Char_OldX, -(sp)
         move.l  Char_OldY, -(sp)
-        JSR     SR_DRAW_CLIP_RECTANGLE
+        JSR     SR_DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
         add.l   #16, sp
         
     REDRAW_CHARACTER:
         move.l  d4, -(sp)
         move.l  d5, -(sp)
         JSR     DRAW_CHARACTER
-        add.l   #8, sp        
+        add.l   #8, sp
         
         * repaint buffer on main screen
         move.b  #CMD_REPAINT, d0
@@ -176,11 +181,22 @@ CAN_MOVE_RIGHT:
 APPLY_GRAVITY:
         move.l  d5, -(sp)
         move.l  d2, -(sp)
+        move.l  d3, -(sp)
+        
+        move.l  Char_YVelocity, d3
+        mulu    d2, d3
 
-        mulu    #GRAVITY, d2
+        mulu    #(GRAVITY/2), d2
+        add.l   d2, Char_YVelocity
+
+        mulu    d2, d2
+        lsr.l   #8, d2
+        lsr.l   #4, d2
+        add.l   d3, d2
         asr.l   #8, d2
         add.l   d2, d5
-
+        
+        move.l  (sp)+, d3
         move.l  (sp)+, d2
 
         JSR     IS_FALLING
@@ -188,10 +204,11 @@ APPLY_GRAVITY:
         beq     CHARACTER_IS_FALLING
         move.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
         add.l   #4, sp
+        move.l  #0, Char_YVelocity
         RTS
     CHARACTER_IS_FALLING:
-        move.l  d5, d7
-        addi.l  #GRID_HEIGHT, d7
+*        move.l  d5, d7
+*        addi.l  #GRID_HEIGHT, d7
         add.l   #4, sp
         RTS
         
@@ -211,7 +228,7 @@ GET_TIME_DIFF:
         move.l  d1, d3      ; current time to previous time
         sub.l   d1, d2      ; subtract current time from previous time
         neg.l   d2          ; get absolute value of time difference
-*        move.l  #30, d2
+*        move.l  #300, d2
         RTS
         
 *********************************************************************
@@ -478,7 +495,7 @@ KEY_LEFT_ARROW      EQU     $25
 KEY_UP_ARROW        EQU     $26
 KEY_RIGHT_ARROW     EQU     $27
 KEY_SPACEBAR        EQU     $20
-KEY_COMBO           EQU     $2527
+KEY_COMBO           EQU     $262527
 
 *-------------------
 * Background Bitmap file descriptors
@@ -508,6 +525,8 @@ Char_StartX         EQU     100
 Char_StartY         EQU     100
 Char_XMAX           EQU     (STAGE_WIDTH-32)
 Char_XVelocity      EQU     1000
+Char_JumpVelocity   EQU     4000
+Char_MaxYVelocity   EQU     1000
 
 Char_ImageData      ds.l    1
 Char_Height         ds.l    1
@@ -519,10 +538,12 @@ Char_ActualWidth    dc.l    32
 *-------------------
 MAP_ROWS            EQU     20
 MAP_COLS            EQU     15
-GRAVITY             EQU     2000
+GRAVITY             EQU     100
 
 CanMove             dc.b    0
 IsFalling           dc.b    0
+IsJumping           dc.b    0
+Char_YVelocity      dc.l    0
 
 *-------------------
 * Graphics pipeline

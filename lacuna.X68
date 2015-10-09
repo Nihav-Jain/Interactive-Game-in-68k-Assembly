@@ -75,8 +75,13 @@ START   ORG     $1000
 * d6: 
 * d7: character.y + character.height
 GAME_LOOP:
+        move.l  d4, Char_OldX
+        move.l  d5, Char_OldY
+        
         JSR     GET_TIME_DIFF
-
+        JSR     APPLY_GRAVITY
+        
+    GET_INPUT:
         clr.l   d6
         move.l  #KEY_COMBO, d1
         move.b  #CMD_KEY_DOWN_EVENT, d0
@@ -90,7 +95,6 @@ GAME_LOOP:
         andi.w  #$FF00, d1
         beq     MOVE_RIGHT
         addi.l  #Char_XVelocity, d6
-        beq     GAME_LOOP
 
     MOVE_LEFT:
         mulu    d6, d2
@@ -98,33 +102,25 @@ GAME_LOOP:
 
         JSR     CAN_MOVE_LEFT
         cmpi.b  #0, CanMove
-        beq     GAME_LOOP
-        
-        move.l  d4, d1
-        add.l   Char_ActualWidth, d1
-        move.l  d1, -12(sp)
-        move.l  d7, -16(sp)
-        sub.l   d2, d1
-        move.l  d1, -(sp)
-        move.l  d5, -(sp)
-        sub.l   #8, sp
-        JSR     SR_DRAW_CLIP_RECTANGLE
-        add.l   #16, sp
+        beq     REDRAW_BACKGROUND
         sub.l   d2, d4
-        bra     REDRAW_CHARACTER  
+        bra     REDRAW_BACKGROUND
     MOVE_RIGHT:
         mulu    d6, d2
         asr.l   #8, d2
 
         JSR     CAN_MOVE_RIGHT
         cmpi.b  #0, CanMove
-        beq     GAME_LOOP
-        
-        move.l  d4, -(sp)
-        move.l  d5, -(sp)        
+        beq     REDRAW_BACKGROUND
         add.l   d2, d4
-        move.l  d4, -(sp)
-        move.l  d7, -(sp)
+        
+    REDRAW_BACKGROUND:
+        move.l  Char_OldX, -(sp)
+        move.l  Char_OldY, -(sp)
+        add.l   #GRID_WIDTH, Char_OldX
+        add.l   #GRID_HEIGHT, Char_OldY
+        move.l  Char_OldX, -(sp)
+        move.l  Char_OldY, -(sp)
         JSR     SR_DRAW_CLIP_RECTANGLE
         add.l   #16, sp
         
@@ -147,15 +143,22 @@ GAME_LOOP:
 
         STOP #$F000
         
+*----------------------------------------------------------*
+*----------------------------------------------------------*
+        
+        
+*********************************************************************
+*                   PHYSICS SUBROUTINES                             *
+*********************************************************************
 
 CAN_MOVE_LEFT:
         movem.l d4, -(sp)       ; TODO: compare with adding / subtracting the value back
         move.b  #0, CanMove
         sub.l   d2, d4
         cmpi.l  #0, d4
-        blt     RETURN_CAN_MOVE_LEFT
+        blt     CANT_MOVE_LEFT
         move.b  #1, CanMove
-    RETURN_CAN_MOVE_LEFT:
+    CANT_MOVE_LEFT:
         movem.l (sp)+, d4
         RTS
         
@@ -164,10 +167,40 @@ CAN_MOVE_RIGHT:
         move.b  #0, CanMove
         add.l   d2, d4
         cmpi.l  #(STAGE_WIDTH-GRID_WIDTH), d4
-        bgt     RETURN_CAN_MOVE_RIGHT
+        bgt     CANT_MOVE_RIGHT
         move.b  #1, CanMove
-    RETURN_CAN_MOVE_RIGHT:
+    CANT_MOVE_RIGHT:
         movem.l (sp)+, d4
+        RTS
+        
+APPLY_GRAVITY:
+        move.l  d5, -(sp)
+        move.l  d2, -(sp)
+
+        mulu    #GRAVITY, d2
+        asr.l   #8, d2
+        add.l   d2, d5
+
+        move.l  (sp)+, d2
+
+        JSR     IS_FALLING
+        cmpi.b  #1, IsFalling
+        beq     CHARACTER_IS_FALLING
+
+        move.l  (sp)+, d5
+        RTS
+    CHARACTER_IS_FALLING:
+        move.l  d5, d7
+        addi.l  #GRID_HEIGHT, d7
+        add.l   #4, sp
+        RTS
+        
+IS_FALLING:
+        move.b  #0, IsFalling
+        cmpi.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
+        bgt     NOT_FALLING
+        move.b  #1, IsFalling
+    NOT_FALLING:
         RTS
 
 GET_TIME_DIFF:
@@ -180,6 +213,10 @@ GET_TIME_DIFF:
         neg.l   d2          ; get absolute value of time difference
 *        move.l  #30, d2
         RTS
+        
+*********************************************************************
+*                   GRAPHICS SUBROUTINES                            *
+*********************************************************************
 
 *-------------------
 * Subroutine : Draws the specified clipping rectangle
@@ -377,6 +414,10 @@ REPAINT:
         TRAP    #15
         RTS
 
+*********************************************************************
+*                   UTILITY SUBROUTINES                             *
+*********************************************************************
+
 *-------------------
 * Subroutine: Swaps the bytes of the lower word in d5
 *-------------------
@@ -464,7 +505,7 @@ CharImageDataOffset EQU     (CharBitmapData+10)      ; LONG
 CharImageWidth      EQU     (CharImageDataOffset+8)  ; LONG
 CharImageHeight     EQU     (CharImageWidth+4)       ; LONG
 Char_StartX         EQU     100
-Char_StartY         EQU     400
+Char_StartY         EQU     100
 Char_XMAX           EQU     (STAGE_WIDTH-32)
 Char_XVelocity      EQU     1000
 
@@ -478,12 +519,16 @@ Char_ActualWidth    dc.l    32
 *-------------------
 MAP_ROWS            EQU     20
 MAP_COLS            EQU     15
-*Map                 ds.w    300
+GRAVITY             EQU     2000
+
 CanMove             dc.b    0
+IsFalling           dc.b    0
 
 *-------------------
 * Graphics pipeline
 *-------------------
+Char_OldX               dc.l    Char_StartX
+Char_OldY               dc.l    Char_StartY
 CharacterTrailRedraw    ds.l    2
         
         END     START

@@ -141,42 +141,42 @@ GAME_LOOP:
     APPLY_GRAVITY_ON_BOXES:
         cmpa.l  LastBox, a1
         bge     APPLY_GRAVITY_ON_CHARACTER
-        move.l  (a1), 8(a1)
-        move.l  4(a1), 12(a1)
+        move.l  (a1), 8(a1)         ; move curX into oldX
+        move.l  4(a1), 12(a1)       ; move curY into oldY
         add.l   #16, a1
         move.l  a1, -(sp)
         add.l   #4, a1
         move.l  a1, -(sp)
         sub.l   #16, a1
         move.l  a1, -(sp)
+        sub.l   #4, a1
         JSR     APPLY_GRAVITY
         add.l   #12, sp
         
-        move.l  4(a1), d6
-        cmp.l   -4(a1), d6
-        bne     REDRAW_BACKGROUND_FOR_BOX
         move.l  8(a1), d6
         cmp.l   (a1), d6
+        bne     REDRAW_BACKGROUND_FOR_BOX
+        move.l  12(a1), d6
+        cmp.l   4(a1), d6
         beq     NEXT_BOX
     REDRAW_BACKGROUND_FOR_BOX:
-        *lea     GameMap, a4
         
-        move.l  4(a1), -(sp)
         move.l  8(a1), -(sp)
-        add.l   #GRID_WIDTH, 4(a1)
-        add.l   #GRID_HEIGHT, 8(a1)
-        move.l  4(a1), -(sp)
+        move.l  12(a1), -(sp)
+        add.l   #GRID_WIDTH, 8(a1)
+        add.l   #GRID_HEIGHT, 12(a1)
         move.l  8(a1), -(sp)
+        move.l  12(a1), -(sp)
         JSR     SR_DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
         add.l   #16, sp
     REDRAW_BOX:
-        move.l  -4(a1), -(sp)
         move.l  (a1), -(sp)
+        move.l  4(a1), -(sp)
         move.l  Box_ImageData, -(sp)
         JSR     DRAW_CHARACTER
         add.l   #12, sp        
     NEXT_BOX:
-        add.l   #(BOX_OBJ_SIZE-4), a1
+        add.l   #BOX_OBJ_SIZE, a1
         bra     APPLY_GRAVITY_ON_BOXES
         
     APPLY_GRAVITY_ON_CHARACTER:    
@@ -557,6 +557,15 @@ REPAINT:
 *********************************************************************
 *                   GAMEPLAY SUBROUTINES                            *
 *********************************************************************
+
+* pointer to box object
+UPDATE_MAP:
+        movem.l d3-d4/a1, -(sp)
+        lea     GameMap, a1
+        
+        movem.l (sp)+, d3-d4/a1
+        RTS
+
 * TODO: add bias to column generator 
 ADD_BOX:
         cmpi.w  #MAX_BOXES, NumBoxes

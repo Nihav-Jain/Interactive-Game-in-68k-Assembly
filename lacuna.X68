@@ -557,16 +557,18 @@ REPAINT:
 *********************************************************************
 *                   GAMEPLAY SUBROUTINES                            *
 *********************************************************************
-
+* TODO: add bias to column generator 
 ADD_BOX:
         cmpi.w  #MAX_BOXES, NumBoxes
         bge     NO_MORE_BOXES
         movem.l d0-d1/a0, -(sp)
         move.l  LastBox, a0
         JSR     GENERATE_RANDOM_MOD_20
-        move.l  RandomColumn, (a0)+       ; current X
+        move.l  RandomColumn, d0
+        lsl.w   #5, d0
+        move.l  d0, (a0)+       ; current X
         move.l  #0, (a0)+       ; current Y
-        move.l  RandomColumn, (a0)+       ; old X
+        move.l  d0, (a0)+       ; old X
         move.l  #0, (a0)+       ; old Y
         move.l  #0, (a0)+       ; Y velocity
         move.b  #0, (a0)+       ; isFalling
@@ -582,31 +584,36 @@ ADD_BOX:
 *********************************************************************
 
 SEED_RANDOM_NUMBER:
-        move.l  d1, RandomNumber
+        movem.l d6, -(sp)
+        move.l  d1, d6
+        mulu    #RANDOM_LARGE, d6
+        move.l  d6, RandomNumber
+        movem.l (sp)+, d6
         RTS
         
 GENERATE_RANDOM_MOD_20:
-        move.l  d6, -(sp)
+        movem.l d0/d1, -(sp)
         move.l  RandomNumber, d6
-        cmpi.l  #0, d6
-        bne     CALCULATE_RANDOM
-        addi.l  #RANDOM_SMALL, d6
-    CALCULATE_RANDOM:
         mulu    #RANDOM_LARGE, d6
-        move.b  #CMD_GET_CYCLES, d0
+        move.l  #CMD_GET_CYCLES, d0
         TRAP    #15
         mulu    d1, d6
+        bcs     NO_RANDOM_CARRY
+        add.l   #1, d6
+    NO_RANDOM_CARRY:
         move.l  d6, RandomNumber
-        swap    d6
+        divu    #20, d6
         clr.w   d6
         swap    d6
-        divu    #MAP_ROWS, d6
+        cmpi.l  #20, d6
+        blt     RETURN_FROM_HERE
+        divu    #20, d6
         clr.w   d6
         swap    d6
-        lsl.w   #5, d6
         move.l  d6, RandomColumn
-        move.l  (sp)+, d6
-        RTS
+    RETURN_FROM_HERE:
+        movem.l (sp)+, d0/d1
+        RTS    
         
 *-------------------
 * Subroutine: Swaps the bytes of the lower word in d5

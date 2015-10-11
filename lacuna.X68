@@ -80,12 +80,12 @@ GAME_LOOP:
         
         JSR     GET_TIME_DIFF
         move.l  d2, CurTimeDiff
-*    ADD_NEW_BOX:    
-*        add.l   d2, BoxGenerationTimer
-*        cmpi.l  #200, BoxGenerationTimer
-*        blt     GET_INPUT
-*        JSR     ADD_BOX
-*        move.l  #0, BoxGenerationTimer
+    ADD_NEW_BOX:
+        add.l   d2, BoxGenerationTimer
+        cmpi.l  #200, BoxGenerationTimer
+        blt     GET_INPUT
+        JSR     ADD_BOX
+        move.l  #0, BoxGenerationTimer
     GET_INPUT:
         clr.l   d6
         move.l  #KEY_COMBO, d1
@@ -101,7 +101,7 @@ GAME_LOOP:
         JSR     IS_FALLING
         add.l   #8, sp
         cmpi.b  #1, IsFalling
-        beq     REDRAW_BACKGROUND
+        beq     UPDATE
         move.l  #2000, Char_YVelocity
         move.b  #1, IsJumping
     CHECK_RIGHT_KEY:
@@ -121,24 +121,70 @@ GAME_LOOP:
 
         JSR     CAN_MOVE_LEFT
         cmpi.b  #0, CanMove
-        beq     REDRAW_BACKGROUND
+        beq     UPDATE
         sub.l   d2, d4
-        bra     REDRAW_BACKGROUND
+        bra     UPDATE
     MOVE_RIGHT:
         mulu    d6, d2
         asr.l   #8, d2
 
         JSR     CAN_MOVE_RIGHT
         cmpi.b  #0, CanMove
-        beq     REDRAW_BACKGROUND
+        beq     UPDATE
         add.l   d2, d4
         
-    REDRAW_BACKGROUND:
+    UPDATE:
         move.l  CurTimeDiff, d2
+        
+        lea     AllBoxes, a1
+    APPLY_GRAVITY_ON_BOXES:
+        cmpa.l  LastBox, a1
+        bge     APPLY_GRAVITY_ON_CHARACTER
+        move.l  (a1), 8(a1)
+        move.l  4(a1), 12(a1)
+        add.l   #16, a1
+        move.l  a1, -(sp)
+        add.l   #4, a1
+        move.l  a1, -(sp)
+        sub.l   #16, a1
+        move.l  a1, -(sp)
+        JSR     APPLY_GRAVITY
+        add.l   #12, sp
+        
+        move.l  4(a1), d6
+        cmp.l   -4(a1), d6
+        bne     REDRAW_BACKGROUND_FOR_BOX
+        move.l  8(a1), d6
+        cmp.l   (a1), d6
+        beq     NEXT_BOX
+    REDRAW_BACKGROUND_FOR_BOX:
+        move.l  4(a1), -(sp)
+        move.l  8(a1), -(sp)
+        add.l   #GRID_WIDTH, 4(a1)
+        add.l   #GRID_HEIGHT, 8(a1)
+        move.l  4(a1), -(sp)
+        move.l  8(a1), -(sp)
+        JSR     SR_DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
+        add.l   #16, sp
+    REDRAW_BOX:     
+        move.l  -4(a1), -(sp)
+        move.l  (a1), -(sp)
+        move.l  Box_ImageData, -(sp)
+        JSR     DRAW_CHARACTER
+        add.l   #12, sp        
+    NEXT_BOX:
+        add.l   #(BOX_OBJ_SIZE-4), a1
+        bra     APPLY_GRAVITY_ON_BOXES
+        
+    APPLY_GRAVITY_ON_CHARACTER:    
+        move.l  d5, Char_CurY
         move.l  #Char_YVelocity, -(sp)
         move.l  #IsFalling, -(sp)
+        move.l  #Char_CurY, -(sp)
         JSR     APPLY_GRAVITY
-        add.l   #8, sp
+        add.l   #12, sp
+        move.l  Char_CurY, d5
+    REDRAW_BACKGROUND_FOR_CHARACTER:        
         move.l  Char_OldX, -(sp)
         move.l  Char_OldY, -(sp)
         add.l   #GRID_WIDTH, Char_OldX
@@ -154,18 +200,7 @@ GAME_LOOP:
         move.l  Char_ImageData, -(sp)
         JSR     DRAW_CHARACTER
         add.l   #12, sp
-        
-        lea     AllBoxes, a1
-    DRAW_BOXES:
-        cmpa.l  LastBox, a1
-        bge     REPAINT_FRAME
-        move.l  (a1), -(sp)
-        move.l  4(a1), -(sp)
-        move.l  Box_ImageData, -(sp)
-        JSR     DRAW_CHARACTER
-        add.l   #12, sp
-        add.l   #BOX_OBJ_SIZE, a1
-        bra     DRAW_BOXES
+                
     REPAINT_FRAME:        
         * repaint buffer on main screen
         move.b  #CMD_REPAINT, d0
@@ -210,18 +245,15 @@ CAN_MOVE_RIGHT:
         
 *-------------------
 * Subroutine : Applies gravity to falling / jumping physics bodies
-* Parameteres: (LONG) pointer to Y-Velocity of body, (LONG) pointer to IsFalling
-*              28(sp), 24(sp)
+* Parameteres: (LONG) pointer to Y-Velocity of body, (LONG) pointer to IsFalling, (LONG) pointer to curY
+*              36(sp), 32(sp), 28(sp)
 *-------------------
 APPLY_GRAVITY:
-        move.l  d5, -(sp)
-        move.l  d2, -(sp)
-        move.l  d3, -(sp)
-        move.l  a1, -(sp)
-        move.l  a2, -(sp)
+        movem.l d2-d3/d5/a1-a3, -(sp)
         
-        move.l  28(sp), a1
-        move.l  24(sp), a2
+        move.l  28(sp), a3
+        move.l  36(sp), a1
+        move.l  32(sp), a2
         move.l  (a1), d3
         mulu    d2, d3
 
@@ -241,32 +273,27 @@ APPLY_GRAVITY:
         
         cmpi.b  #0, IsJumping
         beq     ADD_DISTANCE
-        sub.l   d2, d5
+        sub.l   d2, (a3)
         cmp.l   #0, (a1)
         bgt     CHECK_IF_FALLING
         move.b  #0, IsJumping
         bra     CHECK_IF_FALLING
     ADD_DISTANCE:
-        add.l   d2, d5
+        add.l   d2, (a3)
         
     CHECK_IF_FALLING:
-        move.l  (sp)+, a2
-        move.l  (sp)+, a1
-        move.l  (sp)+, d3
-        move.l  (sp)+, d2
-        
-        move.l  d5, -(sp)
+        move.l  (a3), -(sp)
         move.l  a2, -(sp)
         JSR     IS_FALLING
         add.l   #8, sp
         cmpi.b  #1, (a2)
         beq     CHARACTER_IS_FALLING
-        move.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
-        add.l   #4, sp
+        move.l  #(STAGE_HEIGHT-GRID_HEIGHT), (a3)
         move.l  #0, (a1)
+        movem.l (sp)+, d2-d3/d5/a1-a3
         RTS
     CHARACTER_IS_FALLING:
-        add.l   #4, sp
+        movem.l (sp)+, d2-d3/d5/a1-a3
         RTS
         
 *-------------------
@@ -663,7 +690,7 @@ Box_ActualWidth     dc.l    32
 MAX_BOXES           EQU     280
 BOX_OBJ_SIZE        EQU     22
 LifeSaver04         ds.l    0
-AllBoxes            ds.b    BOX_OBJ_SIZE*MAX_BOXES    ; curX, curY, oldX, oldY, yVelocity, isPickedUp, isFalling
+AllBoxes            ds.b    BOX_OBJ_SIZE*MAX_BOXES    ; curX, curY, oldX, oldY, yVelocity, isFalling, isPickedUp
 NumBoxes            dc.w    0
 LastBox             dc.l    AllBoxes
 BoxGenerationTimer  dc.l    0
@@ -693,6 +720,7 @@ Char_CurY               dc.l    Char_StartY
 Char_OldX               dc.l    Char_StartX
 Char_OldY               dc.l    Char_StartY
 BLOCKS_TO_REDRAW        ds.l    10
+
         
         END     START
         

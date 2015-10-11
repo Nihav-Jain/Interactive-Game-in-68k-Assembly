@@ -46,17 +46,18 @@ START   ORG     $1000
         move.b  #CMD_REPAINT, d0
         TRAP    #15
         
+        JSR     PROCESS_BOX_BITMAP
         
         JSR     PROCESS_CHARACTER_BITMAP
         move.l  #Char_StartX, d4
         move.l  #Char_StartY, d5
-        move.l  #Char_StartY+32, d7
         
         move.l  d4, -(sp)
         move.l  d5, -(sp)
+        move.l  Char_ImageData, -(sp)
         JSR     DRAW_CHARACTER
-        add.l   #8, sp        
-
+        add.l   #12, sp
+        
         * repaint buffer on main screen
         move.b  #CMD_REPAINT, d0
         TRAP    #15
@@ -64,7 +65,6 @@ START   ORG     $1000
         move.b  #CMD_GET_TIME, d0
         TRAP    #15
         move.l  d0, d2
-        
         JSR     GET_TIME_DIFF
 * d0: trap codes
 * d1: trap code requirements
@@ -80,6 +80,12 @@ GAME_LOOP:
         
         JSR     GET_TIME_DIFF
         move.l  d2, CurTimeDiff
+*    ADD_NEW_BOX:    
+*        add.l   d2, BoxGenerationTimer
+*        cmpi.l  #200, BoxGenerationTimer
+*        blt     GET_INPUT
+*        JSR     ADD_BOX
+*        move.l  #0, BoxGenerationTimer
     GET_INPUT:
         clr.l   d6
         move.l  #KEY_COMBO, d1
@@ -90,7 +96,10 @@ GAME_LOOP:
         andi.l  #$00FF0000, d1
         beq     CHECK_RIGHT_KEY
     JUMP:
+        move.l  d5, -(sp)
+        move.l  #IsFalling, -(sp)
         JSR     IS_FALLING
+        add.l   #8, sp
         cmpi.b  #1, IsFalling
         beq     REDRAW_BACKGROUND
         move.l  #2000, Char_YVelocity
@@ -99,7 +108,7 @@ GAME_LOOP:
         move.l  d7, d1
         andi.b  #$FF, d1                ; copy in d7
         beq     CHECK_LEFT_KEY
-        addi.l  #Char_XVelocity, d6        
+        addi.l  #Char_XVelocity, d6
     CHECK_LEFT_KEY:
         move.l  d7, d1
         andi.w  #$FF00, d1
@@ -126,7 +135,10 @@ GAME_LOOP:
         
     REDRAW_BACKGROUND:
         move.l  CurTimeDiff, d2
+        move.l  #Char_YVelocity, -(sp)
+        move.l  #IsFalling, -(sp)
         JSR     APPLY_GRAVITY
+        add.l   #8, sp
         move.l  Char_OldX, -(sp)
         move.l  Char_OldY, -(sp)
         add.l   #GRID_WIDTH, Char_OldX
@@ -139,15 +151,26 @@ GAME_LOOP:
     REDRAW_CHARACTER:
         move.l  d4, -(sp)
         move.l  d5, -(sp)
+        move.l  Char_ImageData, -(sp)
         JSR     DRAW_CHARACTER
-        add.l   #8, sp
+        add.l   #12, sp
         
+        lea     AllBoxes, a1
+    DRAW_BOXES:
+        cmpa.l  LastBox, a1
+        bge     REPAINT_FRAME
+        move.l  (a1), -(sp)
+        move.l  4(a1), -(sp)
+        move.l  Box_ImageData, -(sp)
+        JSR     DRAW_CHARACTER
+        add.l   #12, sp
+        add.l   #BOX_OBJ_SIZE, a1
+        bra     DRAW_BOXES
+    REPAINT_FRAME:        
         * repaint buffer on main screen
         move.b  #CMD_REPAINT, d0
         TRAP    #15
         
-        *cmp.w   #Char_XMAX, d4
-        *blt     GAME_LOOP
         bra GAME_LOOP
         
         move.b  $9,d0
@@ -185,22 +208,31 @@ CAN_MOVE_RIGHT:
         movem.l (sp)+, d4
         RTS
         
+*-------------------
+* Subroutine : Applies gravity to falling / jumping physics bodies
+* Parameteres: (LONG) pointer to Y-Velocity of body, (LONG) pointer to IsFalling
+*              28(sp), 24(sp)
+*-------------------
 APPLY_GRAVITY:
         move.l  d5, -(sp)
         move.l  d2, -(sp)
         move.l  d3, -(sp)
+        move.l  a1, -(sp)
+        move.l  a2, -(sp)
         
-        move.l  Char_YVelocity, d3
+        move.l  28(sp), a1
+        move.l  24(sp), a2
+        move.l  (a1), d3
         mulu    d2, d3
 
         mulu    #(GRAVITY/2), d2
         cmpi.b  #1, IsJumping
         beq     DECREASE_SPEED
-        add.l   d2, Char_YVelocity
-        bra     CALC_DISTANCE        
+        add.l   d2, (a1)
+        bra     CALC_DISTANCE
     DECREASE_SPEED:
-        sub.l   d2, Char_YVelocity
-    CALC_DISTANCE:    
+        sub.l   d2, (a1)
+    CALC_DISTANCE:
         mulu    d2, d2
         lsr.l   #8, d2
         lsr.l   #4, d2
@@ -210,7 +242,7 @@ APPLY_GRAVITY:
         cmpi.b  #0, IsJumping
         beq     ADD_DISTANCE
         sub.l   d2, d5
-        cmp.l   #0, Char_YVelocity
+        cmp.l   #0, (a1)
         bgt     CHECK_IF_FALLING
         move.b  #0, IsJumping
         bra     CHECK_IF_FALLING
@@ -218,39 +250,51 @@ APPLY_GRAVITY:
         add.l   d2, d5
         
     CHECK_IF_FALLING:
+        move.l  (sp)+, a2
+        move.l  (sp)+, a1
         move.l  (sp)+, d3
         move.l  (sp)+, d2
-
+        
+        move.l  d5, -(sp)
+        move.l  a2, -(sp)
         JSR     IS_FALLING
-        cmpi.b  #1, IsFalling
+        add.l   #8, sp
+        cmpi.b  #1, (a2)
         beq     CHARACTER_IS_FALLING
         move.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
         add.l   #4, sp
-        move.l  #0, Char_YVelocity
+        move.l  #0, (a1)
         RTS
     CHARACTER_IS_FALLING:
-*        move.l  d5, d7
-*        addi.l  #GRID_HEIGHT, d7
         add.l   #4, sp
         RTS
         
+*-------------------
+* Subroutine : Checks whether the given physics body is falling or not
+* Parameteres: (LONG) top-left-x, (LONG) pointer to IsFalling
+*              8(sp), 4(sp)
+*-------------------
 IS_FALLING:
-        move.b  #0, IsFalling
+        movem.l d5/a6, -(sp)
+        move.l  12(sp), a6
+        move.l  16(sp), d5
+        move.b  #0, (a6)
         cmpi.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
         bge     NOT_FALLING
-        move.b  #1, IsFalling
+        move.b  #1, (a6)
     NOT_FALLING:
+        movem.l (sp)+, d5/a6
         RTS
 
 GET_TIME_DIFF:
-*        move.b  #CMD_GET_TIME, d0
-*        TRAP    #15
-*        
-*        move.l  d3, d2      ; previous time to d2
-*        move.l  d1, d3      ; current time to previous time
-*        sub.l   d1, d2      ; subtract current time from previous time
-*        neg.l   d2          ; get absolute value of time difference
-        move.l  #1, d2
+        move.b  #CMD_GET_TIME, d0
+        TRAP    #15
+        
+        move.l  d3, d2      ; previous time to d2
+        move.l  d1, d3      ; current time to previous time
+        sub.l   d1, d2      ; subtract current time from previous time
+        neg.l   d2          ; get absolute value of time difference
+*        move.l  #1, d2
         RTS
         
 *********************************************************************
@@ -331,8 +375,7 @@ SR_DRAW_CLIP_RECTANGLE:
 
 *-------------------
 * Subroutine : Draws the character at given offset
-* Parameteres: (LONG) top-left-x, (LONG) top-left-y (order to push onto stack)
-*              44(sp), 40(sp)
+* Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) address of image data to draw (order to push onto stack)
 *-------------------
 *-------------------
 * a0 : address of image data
@@ -348,7 +391,7 @@ SR_DRAW_CLIP_RECTANGLE:
 DRAW_CHARACTER:
         movem.l ALL_BMP_DRAW_REGS, -(sp)         ; store the register values in stack
 
-        move.l  Char_ImageData, a0
+        move.l  BMP_TO_DRAW(sp), a0
                 
         move.l  Char_Height, d2
         subi.l  #1, d2
@@ -357,8 +400,8 @@ DRAW_CHARACTER:
         
         move.l  d5, d6
         mulu    d2, d6
-        move.l  44(sp), d3              ; top-left-x to d3
-        move.l  40(sp), d2              ; top-left-y to d2
+        move.l  LEFT_X_PARAM(sp), d3              ; top-left-x to d3
+        move.l  TOP_Y_PARAM(sp), d2              ; top-left-y to d2
         move.l  d3, d4
         add.l   Char_ActualWidth, d4
         move.l  d2, d7
@@ -388,7 +431,7 @@ DRAW_CHARACTER:
         blt     CONTINUE_CHAR_ROW
         
         sub.l   d5, d6                  ; update row pointer to to previous row (current = current - NumBytesPerRow)
-        move.l  44(sp), d3              ; reset X coordinate
+        move.l  LEFT_X_PARAM(sp), d3              ; reset X coordinate
         addi.l  #1, d2
         cmp.l   d7, d2                  ; char width = char height
         blt     CONTINUE_CHAR_ROW
@@ -443,7 +486,30 @@ PROCESS_CHARACTER_BITMAP:
         lsl.l   #2, d5                  ; d5 = d5 * 4
         move.l  d5, Char_Width
         RTS
+        
+*-------------------
+* Subroutine: Processes the header of the box image bitmap and saves the required data in memory
+*-------------------
+PROCESS_BOX_BITMAP:
 
+        move.l  BoxImageDataOffset, d5
+        JSR     SR_SWAP_LONG
+        lea     BoxBitmapData, a0
+        adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
+        move.l  a0, Box_ImageData
+        
+        move.l  BoxImageHeight, d5
+        JSR     SR_SWAP_LONG
+        move.l  d5, Box_Height
+        
+        move.l  BoxImageWidth, d5
+        JSR     SR_SWAP_LONG        
+        mulu    #BitsPerPixel, d5
+        addi.l  #31, d5
+        lsr.l   #5, d5                  ; d5 = d5 / 32
+        lsl.l   #2, d5                  ; d5 = d5 * 4
+        move.l  d5, Box_Width
+        RTS
         
 *-------------------
 * Subroutine: Copies the double buffer to the main screen
@@ -451,6 +517,30 @@ PROCESS_CHARACTER_BITMAP:
 REPAINT:
         move.b  #CMD_REPAINT, d0
         TRAP    #15
+        RTS
+        
+*********************************************************************
+*                   GAMEPLAY SUBROUTINES                            *
+*********************************************************************
+
+ADD_BOX:
+        cmpi.w  #MAX_BOXES, NumBoxes
+        bge     NO_MORE_BOXES
+        movem.l d0/a0, -(sp)
+        move.l  LastBox, a0
+        move.w  NumBoxes, d0
+        mulu    #32, d0
+        move.l  d0, (a0)+   ; current X
+        move.l  #0, (a0)+     ; current Y
+        move.l  #300, (a0)+   ; old X
+        move.l  #0, (a0)+     ; old Y
+        move.l  #0, (a0)+     ; Y velocity
+        move.b  #0, (a0)+     ; isFalling
+        move.b  #0, (a0)+     ; isPickedUp
+        move.l  a0, LastBox
+        addi.w  #1, NumBoxes
+        movem.l (sp)+, d0/a0
+    NO_MORE_BOXES:
         RTS
 
 *********************************************************************
@@ -517,7 +607,7 @@ KEY_LEFT_ARROW      EQU     $25
 KEY_UP_ARROW        EQU     $26
 KEY_RIGHT_ARROW     EQU     $27
 KEY_SPACEBAR        EQU     $20
-KEY_COMBO           EQU     $262527
+KEY_COMBO           EQU     $00262527
 
 *-------------------
 * Background Bitmap file descriptors
@@ -556,6 +646,29 @@ Char_Width          ds.l    1   ; corresponds to number of bytes per row
 Char_ActualWidth    dc.l    32
 
 *-------------------
+* Box Bitmap file descriptors
+*-------------------
+LifeSaver03         ds.l    0
+BoxBitmapData       INCBIN  "images/crate.bmp"
+
+BoxImageDataOffset  EQU     (BoxBitmapData+10)      ; LONG
+BoxImageWidth       EQU     (BoxImageDataOffset+8)  ; LONG
+BoxImageHeight      EQU     (BoxImageWidth+4)       ; LONG
+
+Box_ImageData       ds.l    1
+Box_Height          ds.l    1
+Box_Width           ds.l    1   ; corresponds to number of bytes per row
+Box_ActualWidth     dc.l    32
+        
+MAX_BOXES           EQU     280
+BOX_OBJ_SIZE        EQU     22
+LifeSaver04         ds.l    0
+AllBoxes            ds.b    BOX_OBJ_SIZE*MAX_BOXES    ; curX, curY, oldX, oldY, yVelocity, isPickedUp, isFalling
+NumBoxes            dc.w    0
+LastBox             dc.l    AllBoxes
+BoxGenerationTimer  dc.l    0
+
+*-------------------
 * Physics
 *-------------------
 MAP_ROWS            EQU     20
@@ -571,9 +684,15 @@ Char_YVelocity      dc.l    0
 *-------------------
 * Graphics pipeline
 *-------------------
+LEFT_X_PARAM            EQU     48
+TOP_Y_PARAM             EQU     44
+BMP_TO_DRAW             EQU     40
+
+Char_CurX               dc.l    Char_StartX
+Char_CurY               dc.l    Char_StartY
 Char_OldX               dc.l    Char_StartX
 Char_OldY               dc.l    Char_StartY
-CharacterTrailRedraw    ds.l    2
+BLOCKS_TO_REDRAW        ds.l    10
         
         END     START
         

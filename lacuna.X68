@@ -64,6 +64,7 @@ START   ORG     $1000
         
         move.b  #CMD_GET_TIME, d0
         TRAP    #15
+        JSR     SEED_RANDOM_NUMBER
         move.l  d0, d2
         JSR     GET_TIME_DIFF
 * d0: trap codes
@@ -158,6 +159,8 @@ GAME_LOOP:
         cmp.l   (a1), d6
         beq     NEXT_BOX
     REDRAW_BACKGROUND_FOR_BOX:
+        *lea     GameMap, a4
+        
         move.l  4(a1), -(sp)
         move.l  8(a1), -(sp)
         add.l   #GRID_WIDTH, 4(a1)
@@ -166,7 +169,7 @@ GAME_LOOP:
         move.l  8(a1), -(sp)
         JSR     SR_DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
         add.l   #16, sp
-    REDRAW_BOX:     
+    REDRAW_BOX:
         move.l  -4(a1), -(sp)
         move.l  (a1), -(sp)
         move.l  Box_ImageData, -(sp)
@@ -326,7 +329,7 @@ GET_TIME_DIFF:
         move.l  d1, d3      ; current time to previous time
         sub.l   d1, d2      ; subtract current time from previous time
         neg.l   d2          ; get absolute value of time difference
-*        move.l  #1, d2
+*        move.l  #2, d2
         RTS
         
 *********************************************************************
@@ -558,20 +561,19 @@ REPAINT:
 ADD_BOX:
         cmpi.w  #MAX_BOXES, NumBoxes
         bge     NO_MORE_BOXES
-        movem.l d0/a0, -(sp)
+        movem.l d0-d1/a0, -(sp)
         move.l  LastBox, a0
-        move.w  NumBoxes, d0
-        mulu    #32, d0
-        move.l  d0, (a0)+   ; current X
-        move.l  #-32, (a0)+     ; current Y
-        move.l  d0, (a0)+   ; old X
-        move.l  #-32, (a0)+     ; old Y
-        move.l  #0, (a0)+     ; Y velocity
-        move.b  #0, (a0)+     ; isFalling
-        move.b  #0, (a0)+     ; isPickedUp
+        JSR     GENERATE_RANDOM_MOD_20
+        move.l  RandomColumn, (a0)+       ; current X
+        move.l  #0, (a0)+       ; current Y
+        move.l  RandomColumn, (a0)+       ; old X
+        move.l  #0, (a0)+       ; old Y
+        move.l  #0, (a0)+       ; Y velocity
+        move.b  #0, (a0)+       ; isFalling
+        move.b  #0, (a0)+       ; isPickedUp
         move.l  a0, LastBox
         addi.w  #1, NumBoxes
-        movem.l (sp)+, d0/a0
+        movem.l (sp)+, d0-d1/a0
     NO_MORE_BOXES:
         RTS
 
@@ -579,6 +581,33 @@ ADD_BOX:
 *                   UTILITY SUBROUTINES                             *
 *********************************************************************
 
+SEED_RANDOM_NUMBER:
+        move.l  d1, RandomNumber
+        RTS
+        
+GENERATE_RANDOM_MOD_20:
+        move.l  d6, -(sp)
+        move.l  RandomNumber, d6
+        cmpi.l  #0, d6
+        bne     CALCULATE_RANDOM
+        addi.l  #RANDOM_SMALL, d6
+    CALCULATE_RANDOM:
+        mulu    #RANDOM_LARGE, d6
+        move.b  #CMD_GET_CYCLES, d0
+        TRAP    #15
+        mulu    d1, d6
+        move.l  d6, RandomNumber
+        swap    d6
+        clr.w   d6
+        swap    d6
+        divu    #MAP_ROWS, d6
+        clr.w   d6
+        swap    d6
+        lsl.w   #5, d6
+        move.l  d6, RandomColumn
+        move.l  (sp)+, d6
+        RTS
+        
 *-------------------
 * Subroutine: Swaps the bytes of the lower word in d5
 *-------------------
@@ -628,6 +657,7 @@ CMD_DBL_BUFFER      EQU     92
 CMD_REPAINT         EQU     94
 CMD_KEY_DOWN_EVENT  EQU     19
 CMD_GET_TIME        EQU     8
+CMD_GET_CYCLES      EQU     31
 
 DBL_BUFFER_ON       EQU     17
 DBL_BUFFER_OFF      EQU     16
@@ -706,14 +736,17 @@ BoxGenerationTimer  dc.l    0
 MAP_ROWS            EQU     20
 MAP_COLS            EQU     15
 GRAVITY             EQU     100
+RANDOM_LARGE        EQU     $5678
+RANDOM_SMALL        EQU     $1231
 
-*GameMap             dcb.l   300,$00    
+GameMap             dcb.l   300,$00    
 CurTimeDiff         dc.l    0
 CanMove             dc.b    0
 IsFalling           dc.b    0
 IsJumping           dc.b    0
 Char_YVelocity      dc.l    0
-
+RandomNumber        dc.l    RANDOM_SMALL
+RandomColumn        dc.l    0
 *-------------------
 * Graphics pipeline
 *-------------------

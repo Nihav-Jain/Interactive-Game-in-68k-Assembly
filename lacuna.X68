@@ -258,8 +258,11 @@ APPLY_GRAVITY:
         mulu    d2, d3
 
         mulu    #(GRAVITY/2), d2
+        cmpa.l  #Char_YVelocity, a1
+        bne     ADD_SPEED
         cmpi.b  #1, IsJumping
         beq     DECREASE_SPEED
+    ADD_SPEED:
         add.l   d2, (a1)
         bra     CALC_DISTANCE
     DECREASE_SPEED:
@@ -271,6 +274,8 @@ APPLY_GRAVITY:
         add.l   d3, d2
         asr.l   #8, d2
         
+        cmpa.l  #Char_YVelocity, a1
+        bne     ADD_DISTANCE
         cmpi.b  #0, IsJumping
         beq     ADD_DISTANCE
         sub.l   d2, (a3)
@@ -558,9 +563,9 @@ ADD_BOX:
         move.w  NumBoxes, d0
         mulu    #32, d0
         move.l  d0, (a0)+   ; current X
-        move.l  #0, (a0)+     ; current Y
-        move.l  #300, (a0)+   ; old X
-        move.l  #0, (a0)+     ; old Y
+        move.l  #-32, (a0)+     ; current Y
+        move.l  d0, (a0)+   ; old X
+        move.l  #-32, (a0)+     ; old Y
         move.l  #0, (a0)+     ; Y velocity
         move.b  #0, (a0)+     ; isFalling
         move.b  #0, (a0)+     ; isPickedUp
@@ -702,6 +707,7 @@ MAP_ROWS            EQU     20
 MAP_COLS            EQU     15
 GRAVITY             EQU     100
 
+*GameMap             dcb.l   300,$00    
 CurTimeDiff         dc.l    0
 CanMove             dc.b    0
 IsFalling           dc.b    0

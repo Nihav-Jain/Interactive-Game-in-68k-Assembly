@@ -160,6 +160,9 @@ GAME_LOOP:
         cmp.l   4(a1), d6
         beq     NEXT_BOX
     REDRAW_BACKGROUND_FOR_BOX:
+        move.l  a1, -(sp)
+        JSR     UPDATE_MAP
+        add.l   #4, sp
         
         move.l  8(a1), -(sp)
         move.l  12(a1), -(sp)
@@ -560,10 +563,27 @@ REPAINT:
 
 * pointer to box object
 UPDATE_MAP:
-        movem.l d3-d4/a1, -(sp)
+        movem.l d3-d4/a1-a2, -(sp)
         lea     GameMap, a1
-        
-        movem.l (sp)+, d3-d4/a1
+        move.l  20(sp), a2
+        move.l  8(a2), d3
+        move.l  12(a2), d4
+        lsr.l   #5, d3
+        lsr.l   #5, d4
+        mulu    #MAP_ROWS, d4
+        add.l   d4, d3
+        lsl.l   #2, d3
+        move.l  #0, (a1, d3)
+
+        move.l  (a2), d3
+        move.l  4(a2), d4
+        lsr.l   #5, d3
+        lsr.l   #5, d4
+        mulu    #MAP_ROWS, d4
+        add.l   d4, d3
+        lsl.l   #2, d3
+        move.l  a2, (a1, d3)
+        movem.l (sp)+, d3-d4/a1-a2
         RTS
 
 * TODO: add bias to column generator 

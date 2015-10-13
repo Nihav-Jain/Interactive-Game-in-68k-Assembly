@@ -309,12 +309,18 @@ APPLY_GRAVITY:
         
 *-------------------
 * Subroutine : Checks whether the given physics body is falling or not
-* Parameteres: (LONG) top-left-x, (LONG) pointer to IsFalling
-*              8(sp), 4(sp)
+* Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) pointer to IsFalling
+*              24(sp), 20(sp), 16(sp)
 *-------------------
 IS_FALLING:
+*        movem.l d3/d5/a6, -(sp)
+*        move.l  12(sp), a6
+*        move.l  24(sp), -(sp)
+*        move.l  20(sp), -(sp)
+*        JSR     GET_MAP_STATUS
+*        add.l   #8, sp
         movem.l d5/a6, -(sp)
-        move.l  12(sp), a6
+        move.l  12(sp), a6        
         move.l  16(sp), d5
         move.b  #0, (a6)
         cmpi.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
@@ -325,14 +331,14 @@ IS_FALLING:
         RTS
 
 GET_TIME_DIFF:
-        move.b  #CMD_GET_TIME, d0
-        TRAP    #15
-        
-        move.l  d3, d2      ; previous time to d2
-        move.l  d1, d3      ; current time to previous time
-        sub.l   d1, d2      ; subtract current time from previous time
-        neg.l   d2          ; get absolute value of time difference
-*        move.l  #2, d2
+*        move.b  #CMD_GET_TIME, d0
+*        TRAP    #15
+*        
+*        move.l  d3, d2      ; previous time to d2
+*        move.l  d1, d3      ; current time to previous time
+*        sub.l   d1, d2      ; subtract current time from previous time
+*        neg.l   d2          ; get absolute value of time difference
+        move.l  #2, d2
         RTS
         
 *********************************************************************
@@ -566,25 +572,35 @@ UPDATE_MAP:
         movem.l d3-d4/a1-a2, -(sp)
         lea     GameMap, a1
         move.l  20(sp), a2
-        move.l  8(a2), d3
-        move.l  12(a2), d4
-        lsr.l   #5, d3
-        lsr.l   #5, d4
-        mulu    #MAP_ROWS, d4
-        add.l   d4, d3
-        lsl.l   #2, d3
+        move.l  8(a2), -(sp)
+        move.l  12(a2), -(sp)
+        JSR     GET_MAP_STATUS
+        add.l   #8, sp
         move.l  #0, (a1, d3)
-
-        move.l  (a2), d3
-        move.l  4(a2), d4
-        lsr.l   #5, d3
-        lsr.l   #5, d4
-        mulu    #MAP_ROWS, d4
-        add.l   d4, d3
-        lsl.l   #2, d3
+        
+        move.l  (a2), -(sp)
+        move.l  4(a2), -(sp)
+        JSR     GET_MAP_STATUS
+        add.l   #8, sp        
         move.l  a2, (a1, d3)
         movem.l (sp)+, d3-d4/a1-a2
         RTS
+
+* Return pointer to map location for coordinates (x, y) in d3
+GET_MAP_STATUS:
+        move.l  8(sp), d3
+        move.l  4(sp), d4
+        lsr.l   #5, d3
+        lsr.l   #5, d4
+        mulu    #MAP_ROWS, d4
+        add.l   d4, d3
+        lsl.l   #2, d3
+        RTS
+        
+*GET_TOP_BOX_OF_COLUMN:
+*        move.l  (sp), d3
+*        lsr.l   #5, d3
+*        
 
 * TODO: add bias to column generator 
 ADD_BOX:
@@ -801,6 +817,7 @@ BLOCKS_TO_REDRAW        ds.l    10
         
 
         
+
 
 
 

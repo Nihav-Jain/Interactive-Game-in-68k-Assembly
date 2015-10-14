@@ -140,6 +140,21 @@ GAME_LOOP:
     UPDATE:
         move.l  CurTimeDiff, d2
         
+*        lea     Stars, a1
+*    REDRAW_COLLECTIBLES:
+*        cmp.w   #0, (a1)
+*        beq     NEXT_COLLECTIBLE
+*        move.l  2(a1), -(sp)
+*        move.l  6(a1), -(sp)
+*        move.l  Fuel_ImageData, -(sp)
+*        JSR     DRAW_CHARACTER
+*        add.l   #12, sp        
+*    NEXT_COLLECTIBLE:        
+*        add.l   #STAR_OBJ_SIZE, a1
+*        cmp.l   #StarsDone, a1
+*        blt     REDRAW_COLLECTIBLES
+        
+    UPDATE_BOXES:
         lea     AllBoxes, a1
     APPLY_GRAVITY_ON_BOXES:
         cmpa.l  LastBox, a1
@@ -181,7 +196,7 @@ GAME_LOOP:
         move.l  4(a1), -(sp)
         move.l  Box_ImageData, -(sp)
         JSR     DRAW_CHARACTER
-        add.l   #12, sp        
+        add.l   #12, sp
     NEXT_BOX:
         add.l   #BOX_OBJ_SIZE, a1
         bra     APPLY_GRAVITY_ON_BOXES
@@ -907,7 +922,7 @@ Char_OldY               dc.l    Char_StartY
 *BLOCKS_TO_REDRAW        ds.l    10
 
 *-------------------
-* Others
+* Fuel / Collectable
 *-------------------
 LifeSaver05          ds.l    0
 FuelBitmapData       INCBIN  "images/radioactive.bmp"
@@ -920,16 +935,33 @@ Fuel_ImageData       ds.l    1
 Fuel_Height          ds.l    1
 Fuel_Width           ds.l    1   ; corresponds to number of bytes per row
 
-Stars                   dc.b    1,2,13      ; alive, x cell, y cell
-                        dc.b    1,6,13
-                        dc.b    1,10,13
-                        dc.b    1,14,13
-                        dc.b    1,18,13
-        
+Stars                   dc.w    1           ; alive     (word size to keep an even boundary)
+                        dc.l    64, 416     ; x, y
+                        dc.b    2,13        ; x cell, y cell
+
+                        dc.w    1           ; alive
+                        dc.l    192, 416    ; x, y
+                        dc.b    6,13        ; x cell, y cell
+
+                        dc.w    1           ; alive
+                        dc.l    320, 416    ; x, y
+                        dc.b    10,13       ; x cell, y cell
+
+                        dc.w    1           ; alive
+                        dc.l    448, 416    ; x, y
+                        dc.b    14,13       ; x cell, y cell
+                        
+                        dc.w    1           ; alive
+                        dc.l    576, 416    ; x, y
+                        dc.b    18,13       ; x cell, y cell
+StarsDone               dc.b    0
+STAR_OBJ_SIZE           EQU     12
+
         END     START
         
 
         
+
 
 
 

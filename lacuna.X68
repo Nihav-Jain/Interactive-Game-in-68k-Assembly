@@ -638,12 +638,13 @@ GET_TOP_BOX_OF_COLUMN:
         add.l   d3, a0
         move.l  8(sp), d3
     TEST_NEXT_ROW:
+        cmp.l   #CurTimeDiff, a0
+        bge     GOT_TOP
         cmp.l   #0, (a0)
         bne     GOT_TOP
         add.l   #ROW_SIZE_IN_BYTES, a0
         addi.l  #1, d3
-        cmp.l   #CurTimeDiff, a0
-        blt     TEST_NEXT_ROW
+        bra     TEST_NEXT_ROW
     GOT_TOP:
         lsl.l   #5, d3
         subi.l  #GRID_HEIGHT, d3

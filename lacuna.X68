@@ -47,7 +47,7 @@ START   ORG     $1000
         TRAP    #15
         
         JSR     PROCESS_BOX_BITMAP
-        
+        JSR     PROCESS_FUEL_BITMAP
         JSR     PROCESS_CHARACTER_BITMAP
         move.l  #Char_StartX, d4
         move.l  #Char_StartY, d5
@@ -106,7 +106,7 @@ GAME_LOOP:
         move.l  CopyOfPrevTime, d3
         cmpi.b  #1, IsFalling
         beq     UPDATE
-        move.l  #2000, Char_YVelocity
+        move.l  #Char_JumpVelocity, Char_YVelocity
         move.b  #1, IsJumping
     CHECK_RIGHT_KEY:
         move.l  d7, d1
@@ -503,13 +503,15 @@ DRAW_CHARACTER:
         lsl.w   #8, d1                  ; #$00BBGG00
         move.b  2(a0, d6.l), d1         ; #$00BBGGRR
         
+        cmp.l   #$00FFFFFF, d1
+        beq     INCREMENT_INDEX
         move.l  #CMD_PEN_COLOR, d0
         TRAP    #15
         
         move.l  d3, d1
         move.l  #CMD_DRAW_PIXEL, d0
         TRAP    #15
-        
+    INCREMENT_INDEX:
         addi.l  #1, d3                  ; increment X coordinate
         addi.l  #3, d6
         
@@ -541,7 +543,7 @@ PROCESS_BACKGROUND_BITMAP:
         move.l  d5, BG_Height
         
         move.l  ImageWidth, d5
-        JSR     SR_SWAP_LONG        
+        JSR     SR_SWAP_LONG
         mulu    #BitsPerPixel, d5
         addi.l  #31, d5
         lsr.l   #5, d5                  ; d5 = d5 / 32
@@ -596,6 +598,30 @@ PROCESS_BOX_BITMAP:
         lsl.l   #2, d5                  ; d5 = d5 * 4
         move.l  d5, Box_Width
         RTS
+        
+*-------------------
+* Subroutine: Processes the header of the radioactive symbol image bitmap and saves the required data in memory
+*-------------------
+PROCESS_FUEL_BITMAP:
+
+        move.l  FuelImageDataOffset, d5
+        JSR     SR_SWAP_LONG
+        lea     FuelBitmapData, a0
+        adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
+        move.l  a0, Fuel_ImageData
+        
+        move.l  FuelImageHeight, d5
+        JSR     SR_SWAP_LONG
+        move.l  d5, Fuel_Height
+        
+        move.l  FuelImageWidth, d5
+        JSR     SR_SWAP_LONG        
+        mulu    #BitsPerPixel, d5
+        addi.l  #31, d5
+        lsr.l   #5, d5                  ; d5 = d5 / 32
+        lsl.l   #2, d5                  ; d5 = d5 * 4
+        move.l  d5, Fuel_Width
+        RTS        
         
 *-------------------
 * Subroutine: Copies the double buffer to the main screen
@@ -816,7 +842,7 @@ Char_StartX         EQU     96
 Char_StartY         EQU     100
 Char_XMAX           EQU     (STAGE_WIDTH-32)
 Char_XVelocity      EQU     1000
-Char_JumpVelocity   EQU     4000
+Char_JumpVelocity   EQU     2000
 Char_MaxYVelocity   EQU     1000
 
 Char_ImageData      ds.l    1
@@ -866,6 +892,7 @@ Char_YVelocity      dc.l    0
 RandomNumber        dc.l    RANDOM_SMALL
 RandomColumn        dc.l    0
 CopyOfPrevTime      dc.l    0
+
 *-------------------
 * Graphics pipeline
 *-------------------
@@ -877,8 +904,27 @@ Char_CurX               dc.l    Char_StartX
 Char_CurY               dc.l    Char_StartY
 Char_OldX               dc.l    Char_StartX
 Char_OldY               dc.l    Char_StartY
-BLOCKS_TO_REDRAW        ds.l    10
+*BLOCKS_TO_REDRAW        ds.l    10
 
+*-------------------
+* Others
+*-------------------
+LifeSaver05          ds.l    0
+FuelBitmapData       INCBIN  "images/radioactive.bmp"
+
+FuelImageDataOffset  EQU     (FuelBitmapData+10)      ; LONG
+FuelImageWidth       EQU     (FuelImageDataOffset+8)  ; LONG
+FuelImageHeight      EQU     (FuelImageWidth+4)       ; LONG
+
+Fuel_ImageData       ds.l    1
+Fuel_Height          ds.l    1
+Fuel_Width           ds.l    1   ; corresponds to number of bytes per row
+
+Stars                   dc.b    1,2,13      ; alive, x cell, y cell
+                        dc.b    1,6,13
+                        dc.b    1,10,13
+                        dc.b    1,14,13
+                        dc.b    1,18,13
         
         END     START
         

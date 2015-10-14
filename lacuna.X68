@@ -74,7 +74,7 @@ START   ORG     $1000
 * d4: character.x
 * d5: character.y
 * d6: net x-velocity
-* d7: copy of d2
+* d7: copy of input keys status
 GAME_LOOP:
         move.l  d4, Char_OldX
         move.l  d5, Char_OldY
@@ -97,10 +97,13 @@ GAME_LOOP:
         andi.l  #$00FF0000, d1
         beq     CHECK_RIGHT_KEY
     JUMP:
+        move.l  d3, CopyOfPrevTime
+        move.l  d4, -(sp)
         move.l  d5, -(sp)
         move.l  #IsFalling, -(sp)
         JSR     IS_FALLING
-        add.l   #8, sp
+        add.l   #12, sp
+        move.l  CopyOfPrevTime, d3
         cmpi.b  #1, IsFalling
         beq     UPDATE
         move.l  #2000, Char_YVelocity
@@ -143,6 +146,7 @@ GAME_LOOP:
         bge     APPLY_GRAVITY_ON_CHARACTER
         move.l  (a1), 8(a1)         ; move curX into oldX
         move.l  4(a1), 12(a1)       ; move curY into oldY
+        move.l  (a1), -(sp)       ; pointer to curX
         add.l   #16, a1
         move.l  a1, -(sp)
         add.l   #4, a1
@@ -184,6 +188,8 @@ GAME_LOOP:
         
     APPLY_GRAVITY_ON_CHARACTER:    
         move.l  d5, Char_CurY
+        move.l  d4, Char_CurX
+        move.l  d4, -(sp)
         move.l  #Char_YVelocity, -(sp)
         move.l  #IsFalling, -(sp)
         move.l  #Char_CurY, -(sp)
@@ -228,31 +234,49 @@ GAME_LOOP:
 *********************************************************************
 
 CAN_MOVE_LEFT:
-        movem.l d4, -(sp)       ; TODO: compare with adding / subtracting the value back
+        movem.l d4/a5, -(sp)       ; TODO: compare with adding / subtracting the value back
         move.b  #0, CanMove
         sub.l   d2, d4
         cmpi.l  #0, d4
         blt     CANT_MOVE_LEFT
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)
+        JSR     GET_MAP_STATUS
+        add.l   #8, sp
+        lea     GameMap, a5
+        add.l   d3, a5
+        cmpi.l  #0, (a5)
+        bne     CANT_MOVE_LEFT
         move.b  #1, CanMove
     CANT_MOVE_LEFT:
-        movem.l (sp)+, d4
+        movem.l (sp)+, d4/a5
         RTS
         
 CAN_MOVE_RIGHT:
-        movem.l d4, -(sp)
+        movem.l d4/a5, -(sp)
         move.b  #0, CanMove
         add.l   d2, d4
-        cmpi.l  #(STAGE_WIDTH-GRID_WIDTH), d4
+        addi.l  #GRID_WIDTH, d4
+        cmpi.l  #STAGE_WIDTH, d4
         bgt     CANT_MOVE_RIGHT
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)
+        JSR     GET_MAP_STATUS
+        add.l   #8, sp
+        subi.l  #GRID_WIDTH, d4
+        lea     GameMap, a5
+        add.l   d3, a5
+        cmpi.l  #0, (a5)
+        bne     CANT_MOVE_RIGHT
         move.b  #1, CanMove
     CANT_MOVE_RIGHT:
-        movem.l (sp)+, d4
+        movem.l (sp)+, d4/a5
         RTS
         
 *-------------------
 * Subroutine : Applies gravity to falling / jumping physics bodies
-* Parameteres: (LONG) pointer to Y-Velocity of body, (LONG) pointer to IsFalling, (LONG) pointer to curY
-*              36(sp), 32(sp), 28(sp)
+* Parameteres: (LONG) curX, (LONG) pointer to Y-Velocity of body, (LONG) pointer to IsFalling, (LONG) pointer to curY
+*              40(sp), 36(sp), 32(sp), 28(sp)
 *-------------------
 APPLY_GRAVITY:
         movem.l d2-d3/d5/a1-a3, -(sp)
@@ -293,13 +317,15 @@ APPLY_GRAVITY:
         add.l   d2, (a3)
         
     CHECK_IF_FALLING:
+        move.l  40(sp), d3
+        move.l  d3, -(sp)   ; x into sp
         move.l  (a3), -(sp)
         move.l  a2, -(sp)
         JSR     IS_FALLING
-        add.l   #8, sp
+        add.l   #12, sp
         cmpi.b  #1, (a2)
         beq     CHARACTER_IS_FALLING
-        move.l  #(STAGE_HEIGHT-GRID_HEIGHT), (a3)
+        move.l  d3, (a3)
         move.l  #0, (a1)
         movem.l (sp)+, d2-d3/d5/a1-a3
         RTS
@@ -308,25 +334,25 @@ APPLY_GRAVITY:
         RTS
         
 *-------------------
-* Subroutine : Checks whether the given physics body is falling or not
+* Subroutine : Checks whether the given physics body is falling or not, return max Y value in d3
 * Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) pointer to IsFalling
-*              24(sp), 20(sp), 16(sp)
+*              20(sp), 16(sp), 12(sp)
 *-------------------
 IS_FALLING:
-*        movem.l d3/d5/a6, -(sp)
-*        move.l  12(sp), a6
-*        move.l  24(sp), -(sp)
-*        move.l  20(sp), -(sp)
-*        JSR     GET_MAP_STATUS
-*        add.l   #8, sp
         movem.l d5/a6, -(sp)
-        move.l  12(sp), a6        
+        move.l  12(sp), a6
         move.l  16(sp), d5
+        move.l  20(sp), d3
+        lsr.l   #5, d3
+        move.l  d3, -(sp)
+        move.l  d5, -(sp)
+        JSR     GET_TOP_BOX_OF_COLUMN
         move.b  #0, (a6)
-        cmpi.l  #(STAGE_HEIGHT-GRID_HEIGHT), d5
+        cmp.l   d3, d5
         bge     NOT_FALLING
         move.b  #1, (a6)
     NOT_FALLING:
+        add.l   #8, sp
         movem.l (sp)+, d5/a6
         RTS
 
@@ -338,7 +364,7 @@ GET_TIME_DIFF:
 *        move.l  d1, d3      ; current time to previous time
 *        sub.l   d1, d2      ; subtract current time from previous time
 *        neg.l   d2          ; get absolute value of time difference
-        move.l  #2, d2
+        move.l  #1, d2
         RTS
         
 *********************************************************************
@@ -586,7 +612,7 @@ UPDATE_MAP:
         movem.l (sp)+, d3-d4/a1-a2
         RTS
 
-* Return pointer to map location for coordinates (x, y) in d3
+* Return offset to to map location for coordinates (x, y) in d3
 GET_MAP_STATUS:
         move.l  8(sp), d3
         move.l  4(sp), d4
@@ -597,11 +623,33 @@ GET_MAP_STATUS:
         lsl.l   #2, d3
         RTS
         
-*GET_TOP_BOX_OF_COLUMN:
-*        move.l  (sp), d3
-*        lsr.l   #5, d3
-*        
-
+* get column number (0-19) in d3 and Y value and return max possible Y value (Y-GridHeight)
+GET_TOP_BOX_OF_COLUMN:
+        movem.l a0, -(sp)
+        move.l  12(sp), d3
+        lsl.l   #2, d3      ; ///right shift by 5 to divide by 32, then left shift by 2 to multiply by 4
+        lea     GameMap, a0
+        add.l   d3, a0
+        move.l  8(sp), d3
+        lsr.l   #5, d3
+        addi.l  #1, d3
+        move.l  d3, 8(sp)
+        mulu    #ROW_SIZE_IN_BYTES, d3
+        add.l   d3, a0
+        move.l  8(sp), d3
+    TEST_NEXT_ROW:
+        cmp.l   #0, (a0)
+        bne     GOT_TOP
+        add.l   #ROW_SIZE_IN_BYTES, a0
+        addi.l  #1, d3
+        cmp.l   #CurTimeDiff, a0
+        blt     TEST_NEXT_ROW
+    GOT_TOP:
+        lsl.l   #5, d3
+        subi.l  #GRID_HEIGHT, d3
+        movem.l (sp)+, a0
+        RTS
+        
 * TODO: add bias to column generator 
 ADD_BOX:
         cmpi.w  #MAX_BOXES, NumBoxes
@@ -747,7 +795,7 @@ CharBitmapData      INCBIN  "images/alien.bmp"
 CharImageDataOffset EQU     (CharBitmapData+10)      ; LONG
 CharImageWidth      EQU     (CharImageDataOffset+8)  ; LONG
 CharImageHeight     EQU     (CharImageWidth+4)       ; LONG
-Char_StartX         EQU     100
+Char_StartX         EQU     96
 Char_StartY         EQU     100
 Char_XMAX           EQU     (STAGE_WIDTH-32)
 Char_XVelocity      EQU     1000
@@ -787,6 +835,7 @@ BoxGenerationTimer  dc.l    0
 *-------------------
 MAP_ROWS            EQU     20
 MAP_COLS            EQU     15
+ROW_SIZE_IN_BYTES   EQU     20*4
 GRAVITY             EQU     100
 RANDOM_LARGE        EQU     $5678
 RANDOM_SMALL        EQU     $1231
@@ -799,6 +848,7 @@ IsJumping           dc.b    0
 Char_YVelocity      dc.l    0
 RandomNumber        dc.l    RANDOM_SMALL
 RandomColumn        dc.l    0
+CopyOfPrevTime      dc.l    0
 *-------------------
 * Graphics pipeline
 *-------------------
@@ -817,6 +867,7 @@ BLOCKS_TO_REDRAW        ds.l    10
         
 
         
+
 
 
 

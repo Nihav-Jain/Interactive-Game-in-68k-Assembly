@@ -339,21 +339,37 @@ APPLY_GRAVITY:
 *              20(sp), 16(sp), 12(sp)
 *-------------------
 IS_FALLING:
-        movem.l d5/a6, -(sp)
-        move.l  12(sp), a6
-        move.l  16(sp), d5
-        move.l  20(sp), d3
+        movem.l d4/d5/a6, -(sp)
+        move.l  16(sp), a6
+        move.l  20(sp), d5
+        move.l  24(sp), d3
         lsr.l   #5, d3
         move.l  d3, -(sp)
         move.l  d5, -(sp)
         JSR     GET_TOP_BOX_OF_COLUMN
+        add.l   #8, sp
         move.b  #0, (a6)
         cmp.l   d3, d5
-        bge     NOT_FALLING
-        move.b  #1, (a6)
-    NOT_FALLING:
+        bge     NOT_FALLING_AT_ALL
+    NOT_FALLING_IN_CUR_COL:
+        move.l  24(sp), d4
+        divu    #GRID_WIDTH, d4
+        swap    d4
+        cmpi.w  #0, d4
+        beq     MARK_FALLING
+        move.l  24(sp), d3
+        lsr.l   #5, d3
+        addi.l  #1, d3
+        move.l  d3, -(sp)
+        move.l  d5, -(sp)
+        JSR     GET_TOP_BOX_OF_COLUMN
         add.l   #8, sp
-        movem.l (sp)+, d5/a6
+        cmp.l   d3, d5
+        bge     NOT_FALLING_AT_ALL
+    MARK_FALLING:
+        move.b  #1, (a6)
+    NOT_FALLING_AT_ALL:
+        movem.l (sp)+, d4/d5/a6
         RTS
 
 GET_TIME_DIFF:

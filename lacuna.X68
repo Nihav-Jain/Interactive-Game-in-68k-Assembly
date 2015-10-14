@@ -155,7 +155,7 @@ GAME_LOOP:
         move.l  a1, -(sp)
         sub.l   #4, a1
         JSR     APPLY_GRAVITY
-        add.l   #12, sp
+        add.l   #16, sp
         
         move.l  8(a1), d6
         cmp.l   (a1), d6
@@ -194,7 +194,7 @@ GAME_LOOP:
         move.l  #IsFalling, -(sp)
         move.l  #Char_CurY, -(sp)
         JSR     APPLY_GRAVITY
-        add.l   #12, sp
+        add.l   #16, sp
         move.l  Char_CurY, d5
     REDRAW_BACKGROUND_FOR_CHARACTER:        
         move.l  Char_OldX, -(sp)
@@ -234,7 +234,7 @@ GAME_LOOP:
 *********************************************************************
 
 CAN_MOVE_LEFT:
-        movem.l d4/a5, -(sp)       ; TODO: compare with adding / subtracting the value back
+        movem.l d3/d4/a5, -(sp)       ; TODO: compare with adding / subtracting the value back
         move.b  #0, CanMove
         sub.l   d2, d4
         cmpi.l  #0, d4
@@ -249,11 +249,11 @@ CAN_MOVE_LEFT:
         bne     CANT_MOVE_LEFT
         move.b  #1, CanMove
     CANT_MOVE_LEFT:
-        movem.l (sp)+, d4/a5
+        movem.l (sp)+, d3/d4/a5
         RTS
         
 CAN_MOVE_RIGHT:
-        movem.l d4/a5, -(sp)
+        movem.l d3/d4/a5, -(sp)
         move.b  #0, CanMove
         add.l   d2, d4
         addi.l  #GRID_WIDTH, d4
@@ -270,7 +270,7 @@ CAN_MOVE_RIGHT:
         bne     CANT_MOVE_RIGHT
         move.b  #1, CanMove
     CANT_MOVE_RIGHT:
-        movem.l (sp)+, d4/a5
+        movem.l (sp)+, d3/d4/a5
         RTS
         
 *-------------------
@@ -373,14 +373,14 @@ IS_FALLING:
         RTS
 
 GET_TIME_DIFF:
-*        move.b  #CMD_GET_TIME, d0
-*        TRAP    #15
-*        
-*        move.l  d3, d2      ; previous time to d2
-*        move.l  d1, d3      ; current time to previous time
-*        sub.l   d1, d2      ; subtract current time from previous time
-*        neg.l   d2          ; get absolute value of time difference
-        move.l  #1, d2
+        move.b  #CMD_GET_TIME, d0
+        TRAP    #15
+        
+        move.l  d3, d2      ; previous time to d2
+        move.l  d1, d3      ; current time to previous time
+        sub.l   d1, d2      ; subtract current time from previous time
+        neg.l   d2          ; get absolute value of time difference
+*        move.l  #1, d2
         RTS
         
 *********************************************************************

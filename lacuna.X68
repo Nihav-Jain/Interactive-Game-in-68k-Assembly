@@ -47,7 +47,6 @@ START   ORG     $1000
         TRAP    #15
         
         JSR     PROCESS_BOX_BITMAP
-*        JSR     PROCESS_FUEL_BITMAP
         JSR     PROCESS_CHARACTER_BITMAP
         move.l  #Char_StartX, d4
         move.l  #Char_StartY, d5
@@ -311,6 +310,8 @@ APPLY_GRAVITY:
         bra     CALC_DISTANCE
     DECREASE_SPEED:
         sub.l   d2, (a1)
+        bpl     CALC_DISTANCE
+        neg.l   (a1)
     CALC_DISTANCE:
         mulu    d2, d2
         lsr.l   #8, d2

@@ -601,30 +601,6 @@ PROCESS_BOX_BITMAP:
         RTS
         
 *-------------------
-* Subroutine: Processes the header of the radioactive symbol image bitmap and saves the required data in memory
-*-------------------
-*PROCESS_FUEL_BITMAP:
-*
-*        move.l  FuelImageDataOffset, d5
-*        JSR     SR_SWAP_LONG
-*        lea     FuelBitmapData, a0
-*        adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
-*        move.l  a0, Fuel_ImageData
-*        
-*        move.l  FuelImageHeight, d5
-*        JSR     SR_SWAP_LONG
-*        move.l  d5, Fuel_Height
-*        
-*        move.l  FuelImageWidth, d5
-*        JSR     SR_SWAP_LONG        
-*        mulu    #BitsPerPixel, d5
-*        addi.l  #31, d5
-*        lsr.l   #5, d5                  ; d5 = d5 / 32
-*        lsl.l   #2, d5                  ; d5 = d5 * 4
-*        move.l  d5, Fuel_Width
-*        RTS        
-        
-*-------------------
 * Subroutine: Copies the double buffer to the main screen
 *-------------------
 REPAINT:
@@ -698,10 +674,23 @@ GET_TOP_BOX_OF_COLUMN:
 ADD_BOX:
         cmpi.w  #MAX_BOXES, NumBoxes
         bge     NO_MORE_BOXES
-        movem.l d0-d1/a0, -(sp)
+        movem.l d0-d1/d3/a0, -(sp)
         move.l  LastBox, a0
         JSR     GENERATE_RANDOM_MOD_20
         move.l  RandomColumn, d0
+    CHECK_IF_COL_IS_FULL:
+        move.l  d0, -(sp)
+        move.l  #0, -(sp)
+        JSR     GET_TOP_BOX_OF_COLUMN
+        add.l   #8, sp
+        cmpi.l  #128, d3                ; max possible y + 32
+        bgt     ADD_TO_CURRENT_COL
+        addi.b  #1, d0
+        cmpi.b  #MAP_ROWS, d0
+        blt     CHECK_IF_COL_IS_FULL
+        move.b  #0, d0
+        bra     CHECK_IF_COL_IS_FULL
+    ADD_TO_CURRENT_COL:
         lsl.w   #5, d0
         move.l  d0, (a0)+       ; current X
         move.l  #0, (a0)+       ; current Y
@@ -716,7 +705,7 @@ ADD_BOX:
         move.w  NumBoxes, -(sp)
         JSR     DRAW_SCORE
         add.l   #4, sp
-        movem.l (sp)+, d0-d1/a0
+        movem.l (sp)+, d0-d1/d3/a0
     NO_MORE_BOXES:
         RTS
 
@@ -780,7 +769,7 @@ SR_SWAP_LONG:
         RTS
 
 *********************************************************************
-*                   UTILITY SUBROUTINES                             *
+*                   SCOREBOARD SUBROUTINES                          *
 *********************************************************************
 
 * score
@@ -1061,7 +1050,7 @@ Box_Height          ds.l    1
 Box_Width           ds.l    1   ; corresponds to number of bytes per row
 Box_ActualWidth     dc.l    32
         
-MAX_BOXES           EQU     280
+MAX_BOXES           EQU     240
 BOX_OBJ_SIZE        EQU     22
 LifeSaver04         ds.l    0
 AllBoxes            ds.b    BOX_OBJ_SIZE*MAX_BOXES    ; curX, curY, oldX, oldY, yVelocity, isFalling, isPickedUp
@@ -1111,7 +1100,7 @@ SCOREBOARD_RX           EQU     60
 SCOREBOARD_LY           EQU     530
  
 SEGMENT_LENGTH          EQU     10
-
+        
 HUNDREDS_DIGIT_X        EQU     10
 HUNDREDS_DIGIT_Y        EQU     500
 

@@ -15,7 +15,11 @@ ALL_BMP_DRAW_REGS   REG     D0-D7/A0
 REG_DRAW_SCORE      REG     d0-d4/d6-d7
 REG_DRAW_DIGIT      REG     d0-d7/a3-a5
 REG_DRAW_SEGMENT    REG     d0-d4
+
 REG_GENERATE_RANDOM REG     d0/d1
+
+REG_ADD_BOX         REG     d0-d1/d3/a0
+REG_UPDATE_MAP      REG     d3-d4/a1-a2
 *-------------------
 * MAIN
 *-------------------
@@ -186,6 +190,8 @@ GAME_LOOP:
         move.l  d4, Char_CurX
         
     UPDATE_BOXES:
+*        cmpi.l  #MAX_BOXES, NumBoxes
+*        bge     GAME_OVER
         lea     AllBoxes, a1
     APPLY_GRAVITY_ON_BOXES:
         cmpa.l  LastBox, a1
@@ -694,52 +700,61 @@ CLEAR_SCREEN:
 *                   GAMEPLAY SUBROUTINES                            *
 *********************************************************************
 
-* pointer to box object
+*-------------------
+* Updates map with pointer of given box
+* Parameters: (LONG) pointer to box object
+*-------------------
 UPDATE_MAP:
-        movem.l d3-d4/a1-a2, -(sp)
+        movem.l REG_UPDATE_MAP, -(sp)
         lea     GameMap, a1
-        move.l  20(sp), a2
-        move.l  8(a2), -(sp)
-        move.l  12(a2), -(sp)
+        move.l  PARAM_PTR_BOX_OBJ(sp), a2
+        move.l  BOX_OLD_X(a2), -(sp)
+        move.l  BOX_OLD_Y(a2), -(sp)
         JSR     GET_MAP_STATUS
-        add.l   #8, sp
-        move.l  #0, (a1, d3)
+        add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
+        move.l  #0, (a1, d3)                        ; reset old cell of box to 0
         
         move.l  (a2), -(sp)
-        move.l  4(a2), -(sp)
+        move.l  BOX_CUR_Y(a2), -(sp)
         JSR     GET_MAP_STATUS
-        add.l   #8, sp        
-        move.l  a2, (a1, d3)
-        movem.l (sp)+, d3-d4/a1-a2
+        add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
+        move.l  a2, (a1, d3)                        ; set pointer of box to current cell
+        movem.l (sp)+, REG_UPDATE_MAP
         RTS
 
-* Return offset to to map location for coordinates (x, y) in d3
+*-------------------
+* Return in d3 the offset to to map location for coordinates (x, y)
+* Parameters: (LONG) X, (LONG) Y
+*-------------------
 GET_MAP_STATUS:
-        move.l  8(sp), d3
-        move.l  4(sp), d4
-        lsr.l   #5, d3
-        lsr.l   #5, d4
+        move.l  PARAM_GET_MAP_STATUS_X(sp), d3
+        move.l  PARAM_GET_MAP_STATUS_Y(sp), d4
+        lsr.l   #5, d3              ; get column number
+        lsr.l   #5, d4              ; get row number
         mulu    #MAP_ROWS, d4
         add.l   d4, d3
         lsl.l   #2, d3
         RTS
         
-* get column number (0-19) in d3 and Y value and return max possible Y value (Y-GridHeight)
+*-------------------
+* Returns the maximum possible Y value, greater than given Y, to which a body (box or character) can fall in the given column
+* Parameters: (LONG) column number, (LONG) min Y value to consider
+*-------------------
 GET_TOP_BOX_OF_COLUMN:
         movem.l a0, -(sp)
-        move.l  12(sp), d3
-        lsl.l   #2, d3      ; ///right shift by 5 to divide by 32, then left shift by 2 to multiply by 4
+        move.l  PARAM_COLUMN_NUMBER(sp), d3
+        lsl.l   #2, d3                  ; multiply by 4 to get offset in GameMap
         lea     GameMap, a0
         add.l   d3, a0
-        move.l  8(sp), d3
-        lsr.l   #5, d3
-        addi.l  #1, d3
-        move.l  d3, 8(sp)
-        mulu    #ROW_SIZE_IN_BYTES, d3
+        move.l  PARAM_MIN_Y(sp), d3
+        lsr.l   #5, d3                  ; divide by 32 i.e. GRID_HEIGHT to get row number
+        addi.l  #1, d3                  ; increment current row number by 1 to start checking
+        move.l  d3, PARAM_MIN_Y(sp)     ; keep a copy of row number
+        mulu    #ROW_SIZE_IN_BYTES, d3  
         add.l   d3, a0
-        move.l  8(sp), d3
+        move.l  PARAM_MIN_Y(sp), d3
     TEST_NEXT_ROW:
-        cmp.l   #CurTimeDiff, a0
+        cmp.l   #CurTimeDiff, a0        ; if end of GameMap reached
         bge     GOT_TOP
         cmp.l   #0, (a0)
         bne     GOT_TOP
@@ -747,25 +762,27 @@ GET_TOP_BOX_OF_COLUMN:
         addi.l  #1, d3
         bra     TEST_NEXT_ROW
     GOT_TOP:
-        lsl.l   #5, d3
+        lsl.l   #5, d3                  ; multiply column number by 32 to get max possible y value for fall
         subi.l  #GRID_HEIGHT, d3
         movem.l (sp)+, a0
         RTS
         
-* TODO: add bias to column generator 
+*-------------------
+* Adds a new box (if possible) to the stage
+*-------------------
 ADD_BOX:
         cmpi.w  #MAX_BOXES, NumBoxes
         bge     NO_MORE_BOXES
-        movem.l d0-d1/d3/a0, -(sp)
+        movem.l REG_ADD_BOX, -(sp)
         move.l  LastBox, a0
-        JSR     GENERATE_RANDOM_MOD_20
+        JSR     GENERATE_RANDOM_MOD_20      ; generate a random column number to add the box to
         move.l  RandomColumn, d0
-    CHECK_IF_COL_IS_FULL:
+    CHECK_IF_COL_IS_FULL:                   ; if that column is already stacked full with boxes, goto next column until you find an empty slot
         move.l  d0, -(sp)
         move.l  #0, -(sp)
         JSR     GET_TOP_BOX_OF_COLUMN
-        add.l   #8, sp
-        cmpi.l  #128, d3                ; max possible y + 32
+        add.l   #SIZE_OF_GET_TOP_BOX_PARAMS, sp
+        cmpi.l  #MIN_STACKED_BOX_Y, d3
         bgt     ADD_TO_CURRENT_COL
         addi.b  #1, d0
         cmpi.b  #MAP_ROWS, d0
@@ -773,21 +790,21 @@ ADD_BOX:
         move.b  #0, d0
         bra     CHECK_IF_COL_IS_FULL
     ADD_TO_CURRENT_COL:
-        lsl.w   #5, d0
-        move.l  d0, (a0)+       ; current X
-        move.l  #0, (a0)+       ; current Y
-        move.l  d0, (a0)+       ; old X
-        move.l  #0, (a0)+       ; old Y
-        move.l  #0, (a0)+       ; Y velocity
-        move.b  #0, (a0)+       ; isFalling
-        move.b  #0, (a0)+       ; isPickedUp
+        lsl.w   #5, d0                      ; multiply column with 32 i.e. GRID_WIDTH
+        move.l  d0, (a0)+                   ; current X
+        move.l  #0, (a0)+                   ; current Y
+        move.l  d0, (a0)+                   ; old X
+        move.l  #0, (a0)+                   ; old Y
+        move.l  #0, (a0)+                   ; Y velocity
+        move.b  #0, (a0)+                   ; isFalling
+        move.b  #0, (a0)+                   ; isPickedUp
         move.l  a0, LastBox
         addi.w  #1, NumBoxes
-        move.w  #0, -(sp)               ; padding to make even
+        move.w  #0, -(sp)                   ; padding to make an even boundary in stack
         move.w  NumBoxes, -(sp)
         JSR     DRAW_SCORE
-        add.l   #4, sp
-        movem.l (sp)+, d0-d1/d3/a0
+        add.l   #SIZE_OF_DRAW_SCORE_PARAMS, sp
+        movem.l (sp)+, REG_ADD_BOX
     NO_MORE_BOXES:
         RTS
 
@@ -1180,7 +1197,17 @@ Box_Width           ds.l    1   ; corresponds to number of bytes per row
 Box_ActualWidth     dc.l    32
         
 MAX_BOXES           EQU     240
+MIN_STACKED_BOX_Y   EQU     128
+
 BOX_OBJ_SIZE        EQU     22
+BOX_CUR_X           EQU     0
+BOX_CUR_Y           EQU     4
+BOX_OLD_X           EQU     8
+BOX_OLD_Y           EQU     12
+BOX_Y_VELOCITY      EQU     16
+BOX_IS_FALLING      EQU     20
+BOX_IS_PICKED       EQU     21
+
 LifeSaver04         ds.l    0
 AllBoxes            ds.b    BOX_OBJ_SIZE*MAX_BOXES    ; curX, curY, oldX, oldY, yVelocity, isFalling, isPickedUp
 NumBoxes            dc.w    0
@@ -1266,17 +1293,29 @@ DrawLEDSegments         dc.l    DRAW_SEGMENT_G
 * Parameter Offsets
 *-------------------
 PARAM_SCORE_TO_DRAW     EQU     32
+
 PARAM_DIGIT_TO_DRAW     EQU     52
 PARAM_DIGIT_X_OFFSET    EQU     50
 PARAM_DIGIT_Y_OFFSET    EQU     48
+
 PARAM_SEGMENT_X_OFFSET  EQU     26
 PARAM_SEGMENT_Y_OFFSET  EQU     24
 
+PARAM_COLUMN_NUMBER     EQU     12
+PARAM_MIN_Y             EQU     8
+
+PARAM_GET_MAP_STATUS_X  EQU     8
+PARAM_GET_MAP_STATUS_Y  EQU     4
+
+PARAM_PTR_BOX_OBJ       EQU     20
 *-------------------
 * Size of Paramerters of a Subroutine
 *-------------------
+SIZE_OF_DRAW_SCORE_PARAMS       EQU     4
 SIZE_OF_DRAW_DIGIT_PARAMS       EQU     8
 SIZE_OF_DRAW_SEGMENT_PARAMS     EQU     4
+SIZE_OF_GET_TOP_BOX_PARAMS      EQU     8
+SIZE_OF_GET_MAP_STATUS_PARAMS   EQU     8
 
         END     START
         

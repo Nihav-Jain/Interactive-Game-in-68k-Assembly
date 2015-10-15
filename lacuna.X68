@@ -29,7 +29,7 @@ REG_CAN_MOVE        REG     d3/d4/a5
 *-------------------
 START   ORG     $1000
         
-        JSR     RESIZE_OUTPUT_WINDOW        
+        JSR     RESIZE_OUTPUT_WINDOW
         JSR     INTRODUCTION
         JSR     INITIALIZE
         
@@ -86,44 +86,16 @@ GAME_LOOP:
         andi.b  #$FF, d1
         beq     CHECK_LEFT_KEY
         addi.l  #Char_XVelocity, d6
-        bra     MOVE_RIGHT
+        JSR     MOVE_RIGHT
+        bra     UPDATE
     CHECK_LEFT_KEY:
         move.l  d7, d1
         andi.w  #$FF00, d1
         beq     UPDATE
         addi.l  #Char_XVelocity, d6
-        
-    MOVE_LEFT:
-        mulu    d6, d2                  ; displacement = velocity * time
-        asr.l   #8, d2                  ; arithmetic shift to account for multiplication of fixed point values
+        JSR     MOVE_LEFT
 
-        JSR     CAN_MOVE_LEFT
-        cmpi.b  #0, CanMove
-        beq     SNAP_TO_LEFT            ; if character cant move left, snap to current grid
-        sub.l   d2, d4                  ; newX = OldX - displacement
-        bra     UPDATE
-    SNAP_TO_LEFT:
-        lsr.l   #5, d4                  ; get current column
-        lsl.l   #5, d4                  ; snap to extreme left of column
-        bra     UPDATE
-    MOVE_RIGHT:
-        mulu    d6, d2
-        asr.l   #8, d2
 
-        JSR     CAN_MOVE_RIGHT
-        cmpi.b  #0, CanMove
-        bne     ADD_DISPLACEMENT
-    SNAP_TO_RIGHT:
-        move.l  d4, d1
-        divu    #32, d1
-        andi.l  #$FFFF0000, d1
-        beq     UPDATE
-        lsr.l   #5, d4
-        addi.b  #1, d4
-        lsl.l   #5, d4
-        bra     UPDATE
-    ADD_DISPLACEMENT:
-        add.l   d2, d4
     UPDATE:
         move.l  CurTimeDiff, d2
         move.l  d5, Char_CurY
@@ -829,7 +801,7 @@ INITIALIZE:
         * repaint buffer on main screen
         JSR     REPAINT
         RTS
-        
+                
 UPDATE_CHARACTER:
         JSR     UPDATE_CHARACTER_PHYSICS
         JSR     UPDATE_CHARACTER_GRAPHICS
@@ -868,6 +840,42 @@ UPDATE_CHARACTER_GRAPHICS:
         JSR     DRAW_PHYSICS_BODY
         add.l   #SIZE_OF_DRAW_BODY_PARAMS, sp
         
+        RTS
+
+MOVE_LEFT:
+        mulu    d6, d2                  ; displacement = velocity * time
+        asr.l   #8, d2                  ; arithmetic shift to account for multiplication of fixed point values
+
+        JSR     CAN_MOVE_LEFT
+        cmpi.b  #0, CanMove
+        beq     SNAP_TO_LEFT            ; if character cant move left, snap to current grid
+        sub.l   d2, d4                  ; newX = OldX - displacement
+        bra     RTS_FROM_MOVE_LEFT
+    SNAP_TO_LEFT:
+        lsr.l   #5, d4                  ; get current column
+        lsl.l   #5, d4                  ; snap to extreme left of column
+    RTS_FROM_MOVE_LEFT:        
+        RTS
+        
+MOVE_RIGHT:
+        mulu    d6, d2
+        asr.l   #8, d2
+
+        JSR     CAN_MOVE_RIGHT
+        cmpi.b  #0, CanMove
+        bne     ADD_DISPLACEMENT
+    SNAP_TO_RIGHT:
+        move.l  d4, d1
+        divu    #32, d1
+        andi.l  #$FFFF0000, d1
+        beq     RTS_FROM_MOVE_RIGHT
+        lsr.l   #5, d4
+        addi.b  #1, d4
+        lsl.l   #5, d4
+        bra     RTS_FROM_MOVE_RIGHT
+    ADD_DISPLACEMENT:
+        add.l   d2, d4
+    RTS_FROM_MOVE_RIGHT:
         RTS
         
 UPDATE_BOX_PHYSICS:

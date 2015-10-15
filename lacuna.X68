@@ -19,8 +19,29 @@ START   ORG     $1000
         move.b  #CMD_OUTPUT_RES, d0
         TRAP    #15
         
-        * TODO: add start button
+       * display game title
+        lea     GameTitle, a1
+        move.w  #STAGE_WIDTH/2-60, d1
+        move.w  #STAGE_HEIGHT/2, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
+
+        * display start game text
+        lea     StartGameText, a1
+        move.w  #STAGE_WIDTH/2-100, d1
+        move.w  #STAGE_HEIGHT/2+40, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
         
+        move.b  #CMD_KEY_DOWN_EVENT, d0
+    PRESS_TO_START:
+        move.l  #KEY_SPACEBAR, d1
+        TRAP    #15
+        andi.b  #$FF, d1
+        beq     PRESS_TO_START
+                
+    LOADING:
+        JSR     CLEAR_SCREEN
         * display loading text
         lea     LoadingText, a1
         move.w  #STAGE_WIDTH/2-60, d1
@@ -58,8 +79,7 @@ START   ORG     $1000
         add.l   #12, sp
         
         * repaint buffer on main screen
-        move.b  #CMD_REPAINT, d0
-        TRAP    #15
+        JSR     REPAINT
         
         move.b  #CMD_GET_TIME, d0
         TRAP    #15
@@ -241,9 +261,7 @@ GAME_LOOP:
         add.l   #12, sp
                 
     REPAINT_FRAME:        
-        * repaint buffer on main screen
-        move.b  #CMD_REPAINT, d0
-        TRAP    #15
+        JSR     REPAINT
         
         bra GAME_LOOP
         
@@ -264,8 +282,7 @@ GAME_LOOP:
         JSR     DRAW_SCORE
         add.l   #4, sp
         
-        move.b  #CMD_REPAINT, d0
-        TRAP    #15
+        JSR     REPAINT
         
         move.b  $9,d0
         TRAP    #15
@@ -656,6 +673,12 @@ REPAINT:
         TRAP    #15
         RTS
         
+CLEAR_SCREEN:
+        move.w  #$FF00, d1
+        move.b  #CMD_CLEAR_SCREEN, d0
+        TRAP    #15
+        RTS
+        
 *********************************************************************
 *                   GAMEPLAY SUBROUTINES                            *
 *********************************************************************
@@ -1016,6 +1039,8 @@ STAGE_WIDTH         EQU     640
 STAGE_HEIGHT        EQU     480
 GRID_WIDTH          EQU     32
 GRID_HEIGHT         EQU     32
+GameTitle           dc.b    'Avoid and Evade',0
+StartGameText       dc.b    'Press Space To Start',0
 LoadingText         dc.b    'Loading...', 0
 GameOverText        dc.b    'Game Over, Your Score:',0
 

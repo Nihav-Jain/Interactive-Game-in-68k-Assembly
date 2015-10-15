@@ -20,87 +20,25 @@ REG_GENERATE_RANDOM REG     d0/d1
 
 REG_ADD_BOX         REG     d0-d1/d3/a0
 REG_UPDATE_MAP      REG     d3-d4/a1-a2
+
+REG_IS_FALLING      REG     d4/d5/a6
+REG_APPLY_GRAVITY   REG     d2-d3/d5/a1-a3
+REG_CAN_MOVE        REG     d3/d4/a5
 *-------------------
 * MAIN
 *-------------------
 START   ORG     $1000
-
-        * resize output window 
-        move.w  #SCREEN_WIDTH, d1
-        swap    d1
-        move.w  #SCREEN_HEIGHT, d1
-        move.b  #CMD_OUTPUT_RES, d0
-        TRAP    #15
         
-       * display game title
-        lea     GameTitle, a1
-        move.w  #STAGE_WIDTH/2-60, d1
-        move.w  #STAGE_HEIGHT/2, d2
-        move.b  #CMD_DRAW_STRING, d0
-        TRAP    #15
-
-        * display start game text
-        lea     StartGameText, a1
-        move.w  #STAGE_WIDTH/2-80, d1
-        move.w  #STAGE_HEIGHT/2+40, d2
-        move.b  #CMD_DRAW_STRING, d0
-        TRAP    #15
-        
-        move.b  #CMD_KEY_DOWN_EVENT, d0
-    PRESS_TO_START:
-        move.l  #KEY_SPACEBAR, d1
-        TRAP    #15
-        andi.b  #$FF, d1
-        beq     PRESS_TO_START
-                
-    LOADING:
-        JSR     CLEAR_SCREEN
-        * display loading text
-        lea     LoadingText, a1
-        move.w  #STAGE_WIDTH/2-60, d1
-        move.w  #STAGE_HEIGHT/2, d2
-        move.b  #CMD_DRAW_STRING, d0
-        TRAP    #15
-        
-        * turn on double buffering drawing mode
-        move.b  #DBL_BUFFER_ON, d1
-        move.b  #CMD_DBL_BUFFER, d0
-        TRAP    #15 
-        
-        JSR     PROCESS_BACKGROUND_BITMAP
-        * draw background in buffer
-        move.l  #0, -(sp)
-        move.l  #0, -(sp)
-        move.l  #640, -(sp)
-        move.l  #480, -(sp)
-        JSR     SR_DRAW_CLIP_RECTANGLE
-        add.l   #16, sp
-        
-        JSR     PROCESS_BOX_BITMAP
-        JSR     PROCESS_CHARACTER_BITMAP
-        move.l  #Char_StartX, d4
-        move.l  #Char_StartY, d5
-        
-        move.l  d4, -(sp)
-        move.l  d5, -(sp)
-        move.l  Char_ImageData, -(sp)
-        JSR     DRAW_PHYSICS_BODY
-        add.l   #12, sp
-
-        lea     GameDescription, a1
-        move.w  #200, d1
-        move.w  #500, d2
-        move.b  #CMD_DRAW_STRING, d0
-        TRAP    #15
-        
-        * repaint buffer on main screen
-        JSR     REPAINT
+        JSR     RESIZE_OUTPUT_WINDOW        
+        JSR     INTRODUCTION
+        JSR     INITIALIZE
         
         move.b  #CMD_GET_TIME, d0
         TRAP    #15
         JSR     SEED_RANDOM_NUMBER
         move.l  d0, d2
         JSR     GET_TIME_DIFF
+        
 * d0: trap codes
 * d1: trap code requirements
 * d2: time difference
@@ -226,7 +164,7 @@ GAME_LOOP:
         add.l   #GRID_HEIGHT, 12(a1)
         move.l  8(a1), -(sp)
         move.l  12(a1), -(sp)
-        JSR     SR_DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
+        JSR     DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
         add.l   #16, sp
     REDRAW_BOX:
         move.l  (a1), -(sp)
@@ -245,7 +183,7 @@ GAME_LOOP:
         cmpi.l  #0, d5
         blt     NEXT_BOX
         cmpi.l  #GRID_HEIGHT, d5
-        blt     GAME_OVER
+        blt     EXIT_GAME_LOOP
     NEXT_BOX:
         add.l   #BOX_OBJ_SIZE, a1
         bra     APPLY_GRAVITY_ON_BOXES
@@ -267,7 +205,7 @@ GAME_LOOP:
         add.l   #GRID_HEIGHT, Char_OldY
         move.l  Char_OldX, -(sp)
         move.l  Char_OldY, -(sp)
-        JSR     SR_DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
+        JSR     DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
         add.l   #16, sp
         
     REDRAW_CHARACTER:
@@ -281,25 +219,9 @@ GAME_LOOP:
         JSR     REPAINT
         
         bra GAME_LOOP
-        
-    GAME_OVER:
-        move.w  #$FF00, d1
-        move.b  #CMD_CLEAR_SCREEN, d0
-        TRAP    #15
-
-        * display game over text
-        lea     GameOverText, a1
-        move.w  #STAGE_WIDTH/2-100, d1
-        move.w  #STAGE_HEIGHT/2, d2
-        move.b  #CMD_DRAW_STRING, d0
-        TRAP    #15
-        
-        move.w  #0, -(sp)               ; padding to make even
-        move.w  NumBoxes, -(sp)
-        JSR     DRAW_SCORE
-        add.l   #4, sp
-        
-        JSR     REPAINT
+    
+    EXIT_GAME_LOOP:
+        JSR     GAME_OVER
         
         move.b  $9,d0
         TRAP    #15
@@ -314,147 +236,169 @@ GAME_LOOP:
 *                   PHYSICS SUBROUTINES                             *
 *********************************************************************
 
+*-------------------
+* Checks if character can move left for the given displacement
+*-------------------
 CAN_MOVE_LEFT:
-        movem.l d3/d4/a5, -(sp)       ; TODO: compare with adding / subtracting the value back
-        move.b  #0, CanMove
-        sub.l   d2, d4
-        cmpi.l  #0, d4
+        movem.l REG_CAN_MOVE, -(sp)
+        move.b  #0, CanMove        
+        sub.l   d2, d4                  ; subtract displacement to current X
+
+        cmpi.l  #0, d4                  ; check left wall
         blt     CANT_MOVE_LEFT
+
+        * get status of grid with updated coordinates
         move.l  d4, -(sp)
         move.l  d5, -(sp)
         JSR     GET_MAP_STATUS
-        add.l   #8, sp
+        add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
+
         lea     GameMap, a5
-        add.l   d3, a5
-        cmpi.l  #0, (a5)
+        add.l   d3, a5                  ; add cell offset to GameMap pointer
+        cmpi.l  #0, (a5)                ; check if cell is empty
         bne     CANT_MOVE_LEFT
         move.b  #1, CanMove
     CANT_MOVE_LEFT:
-        movem.l (sp)+, d3/d4/a5
+        movem.l (sp)+, REG_CAN_MOVE
         RTS
         
+*-------------------
+* Checks if character can move right for the given displacement
+*-------------------
 CAN_MOVE_RIGHT:
-        movem.l d3/d4/a5, -(sp)
+        movem.l REG_CAN_MOVE, -(sp)
         move.b  #0, CanMove
-        add.l   d2, d4
-        addi.l  #GRID_WIDTH, d4
-        cmpi.l  #STAGE_WIDTH, d4
+        add.l   d2, d4                  ; add displacement to current X
+        addi.l  #GRID_WIDTH, d4         ; get rightX of character
+        
+        cmpi.l  #STAGE_WIDTH, d4        ; check right wall
         bgt     CANT_MOVE_RIGHT
+        
+        * get status of grid with updated coordinates
         move.l  d4, -(sp)
         move.l  d5, -(sp)
         JSR     GET_MAP_STATUS
-        add.l   #8, sp
+        add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
+        
         subi.l  #GRID_WIDTH, d4
         lea     GameMap, a5
-        add.l   d3, a5
-        cmpi.l  #0, (a5)
+        add.l   d3, a5                  ; add cell offset to GameMap pointer
+        cmpi.l  #0, (a5)                ; check if cell is empty
         bne     CANT_MOVE_RIGHT
         move.b  #1, CanMove
     CANT_MOVE_RIGHT:
-        movem.l (sp)+, d3/d4/a5
+        movem.l (sp)+, REG_CAN_MOVE
         RTS
         
 *-------------------
-* Subroutine : Applies gravity to falling / jumping physics bodies
+* Applies gravity to falling / jumping physics bodies
 * Parameteres: (LONG) curX, (LONG) pointer to Y-Velocity of body, (LONG) pointer to IsFalling, (LONG) pointer to curY
-*              40(sp), 36(sp), 32(sp), 28(sp)
 *-------------------
 APPLY_GRAVITY:
-        movem.l d2-d3/d5/a1-a3, -(sp)
+        movem.l REG_APPLY_GRAVITY, -(sp)
         
-        move.l  28(sp), a3
-        move.l  36(sp), a1
-        move.l  32(sp), a2
+        move.l  PARAM_GRAV_PTR_Y(sp), a3
+        move.l  PARAM_GRAV_PTR_YVEL(sp), a1
+        move.l  PARAM_GRAV_PTR_FALLING(sp), a2
         move.l  (a1), d3
-        mulu    d2, d3
+        mulu    d2, d3                      ; velocity * time difference = displacement
 
-        mulu    #(GRAVITY/2), d2
-        cmpa.l  #Char_YVelocity, a1
+        mulu    #(GRAVITY/2), d2            ; for v = u + at (taken a/2 here to reduce number of calculations)
+        
+        cmpa.l  #Char_YVelocity, a1         ; are we applying gravity to character?
         bne     ADD_SPEED
-        cmpi.b  #1, IsJumping
+        cmpi.b  #1, IsJumping               ; is character jumping?
         beq     DECREASE_SPEED
     ADD_SPEED:
-        add.l   d2, (a1)
+        add.l   d2, (a1)                    ; v = u + at
         bra     CALC_DISTANCE
     DECREASE_SPEED:
-        sub.l   d2, (a1)
+        sub.l   d2, (a1)                    ; decrease velocity if jumping (negative acceleration) -> v = u - at
         bpl     CALC_DISTANCE
-        neg.l   (a1)
+        neg.l   (a1)                        ; if velocity becomes negative, that means body will travel downwards from next frame
+    * for S = ut + a(t^2) / 2
     CALC_DISTANCE:
-        mulu    d2, d2
-        lsr.l   #8, d2
+        mulu    d2, d2                      ; (at)^2
+        lsr.l   #8, d2                      ; fixed point value conversion to actual base 10 (divide by 2^12)
         lsr.l   #4, d2
-        add.l   d3, d2
+        add.l   d3, d2                      ; u + a(t^2) / 2
         asr.l   #8, d2
         
-        cmpa.l  #Char_YVelocity, a1
+        cmpa.l  #Char_YVelocity, a1         ; are we applying gravity to character?
         bne     ADD_DISTANCE
         cmpi.b  #0, IsJumping
         beq     ADD_DISTANCE
-        sub.l   d2, (a3)
-        cmp.l   #0, (a1)
+        sub.l   d2, (a3)                    ; subtract the calculated displacement if character is jumping
+        cmp.l   #0, (a1)                    ; if Y velocity is now 0, check if character is in air or on a surface
         bgt     CHECK_IF_FALLING
-        move.b  #0, IsJumping
+        move.b  #0, IsJumping               ; reset jumping flag
         bra     CHECK_IF_FALLING
     ADD_DISTANCE:
         add.l   d2, (a3)
         
     CHECK_IF_FALLING:
-        move.l  40(sp), d3
-        move.l  d3, -(sp)   ; x into sp
+        move.l  PARAM_GRAV_X(sp), d3
+        move.l  d3, -(sp)
         move.l  (a3), -(sp)
         move.l  a2, -(sp)
         JSR     IS_FALLING
-        add.l   #12, sp
+        add.l   #SIZE_OF_IS_FALLING_PARAMS, sp
+        
         cmpi.b  #1, (a2)
         beq     CHARACTER_IS_FALLING
-        move.l  d3, (a3)
-        move.l  #0, (a1)
-        movem.l (sp)+, d2-d3/d5/a1-a3
-        RTS
+        move.l  d3, (a3)                    ; stick to floor if not falling
+        move.l  #0, (a1)                    ; mark not falling
     CHARACTER_IS_FALLING:
-        movem.l (sp)+, d2-d3/d5/a1-a3
+        movem.l (sp)+, REG_APPLY_GRAVITY
         RTS
         
 *-------------------
-* Subroutine : Checks whether the given physics body is falling or not, return max Y value in d3
+* Checks whether the given physics body is falling or not, returns max possible Y value to which this body can fall in d3
 * Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) pointer to IsFalling
-*              20(sp), 16(sp), 12(sp)
 *-------------------
 IS_FALLING:
-        movem.l d4/d5/a6, -(sp)
-        move.l  16(sp), a6
-        move.l  20(sp), d5
-        move.l  24(sp), d3
-        lsr.l   #5, d3
+        movem.l REG_IS_FALLING, -(sp)
+        
+        move.l  PARAM_FALLING_PTR(sp), a6
+        move.l  PARAM_FALLING_Y(sp), d5
+        move.l  PARAM_FALLING_X(sp), d3
+        
+        lsr.l   #5, d3                              ; get column number
         move.l  d3, -(sp)
         move.l  d5, -(sp)
         JSR     GET_TOP_BOX_OF_COLUMN
-        add.l   #8, sp
-        move.b  #0, (a6)
-        cmp.l   d3, d5
+        add.l   #SIZE_OF_GET_TOP_BOX_PARAMS, sp
+        
+        move.b  #0, (a6)                            ; reset IsFalling for this body
+        cmp.l   d3, d5                              ; if current Y is more than or equal to max possible Y, then body is not falling
         bge     NOT_FALLING_AT_ALL
+        
+    * if character is not aligned with the grids, then check for next cell as well (current column + 1)
     NOT_FALLING_IN_CUR_COL:
-        move.l  24(sp), d4
+        move.l  PARAM_FALLING_X(sp), d4
         divu    #GRID_WIDTH, d4
-        swap    d4
-        cmpi.w  #0, d4
-        beq     MARK_FALLING
-        move.l  24(sp), d3
-        lsr.l   #5, d3
-        addi.l  #1, d3
+        swap    d4                                  ; get remainder in lower word of d4
+        cmpi.w  #0, d4                              ; check if body is aligned to a grid or not
+        beq     MARK_FALLING                        ; if 0, then body is aligned to a grid
+        
+        move.l  PARAM_FALLING_X(sp), d3
+        lsr.l   #5, d3                              ; get current column
+        addi.l  #1, d3                              ; incrememt current column value by 1
         move.l  d3, -(sp)
         move.l  d5, -(sp)
         JSR     GET_TOP_BOX_OF_COLUMN
-        add.l   #8, sp
-        cmp.l   d3, d5
+        add.l   #SIZE_OF_GET_TOP_BOX_PARAMS, sp
+        cmp.l   d3, d5                              ; if current Y is more than or equal to max possible Y of thislumn, then body is not falling
         bge     NOT_FALLING_AT_ALL
     MARK_FALLING:
-        move.b  #1, (a6)
+        move.b  #1, (a6)                            ; mark body to be falling
     NOT_FALLING_AT_ALL:
-        movem.l (sp)+, d4/d5/a6
+        movem.l (sp)+, REG_IS_FALLING
         RTS
 
+*-------------------
+* Gets the time difference since last frame into d2
+*-------------------
 GET_TIME_DIFF:
         move.b  #CMD_GET_TIME, d0
         TRAP    #15
@@ -472,8 +416,7 @@ GET_TIME_DIFF:
 
 *-------------------
 * Draws the specified clipping rectangle
-* Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) bottom-right-x, (LONG) bottom-right-y (order to push onto stack)
-*              52(sp), 48(sp), 44(sp), 40(sp)
+* Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) bottom-right-x, (LONG) bottom-right-y
 *-------------------
 *-------------------
 * a0 : address of image data
@@ -486,7 +429,7 @@ GET_TIME_DIFF:
 * d6 : pixel offset
 * d7 : offset of the number of bytes in a row
 *-------------------
-SR_DRAW_CLIP_RECTANGLE:
+DRAW_CLIP_RECTANGLE:
 
         movem.l REG_DRAW_BMP, -(sp)         ; store the register values in stack
 
@@ -828,6 +771,106 @@ ADD_BOX:
         
         movem.l (sp)+, REG_ADD_BOX
     NO_MORE_BOXES:
+        RTS
+        
+        
+RESIZE_OUTPUT_WINDOW:
+        * resize output window 
+        move.w  #SCREEN_WIDTH, d1
+        swap    d1
+        move.w  #SCREEN_HEIGHT, d1
+        move.b  #CMD_OUTPUT_RES, d0
+        TRAP    #15
+        RTS        
+        
+INTRODUCTION:
+       * display game title
+        lea     GameTitle, a1
+        move.w  #STAGE_WIDTH/2-60, d1
+        move.w  #STAGE_HEIGHT/2, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
+
+        * display start game text
+        lea     StartGameText, a1
+        move.w  #STAGE_WIDTH/2-80, d1
+        move.w  #STAGE_HEIGHT/2+40, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
+
+        move.b  #CMD_KEY_DOWN_EVENT, d0
+    PRESS_TO_START:
+        move.l  #KEY_SPACEBAR, d1
+        TRAP    #15
+        andi.b  #$FF, d1
+        beq     PRESS_TO_START
+        
+        RTS
+        
+INITIALIZE:
+        JSR     CLEAR_SCREEN
+
+        * display loading text
+        lea     LoadingText, a1
+        move.w  #STAGE_WIDTH/2-60, d1
+        move.w  #STAGE_HEIGHT/2, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
+        
+        * turn on double buffering drawing mode
+        move.b  #DBL_BUFFER_ON, d1
+        move.b  #CMD_DBL_BUFFER, d0
+        TRAP    #15
+        
+        JSR     PROCESS_BACKGROUND_BITMAP
+        JSR     PROCESS_BOX_BITMAP
+        JSR     PROCESS_CHARACTER_BITMAP
+        
+        * draw background in buffer
+        move.l  #0, -(sp)
+        move.l  #0, -(sp)
+        move.l  #STAGE_WIDTH, -(sp)
+        move.l  #STAGE_HEIGHT, -(sp)
+        JSR     DRAW_CLIP_RECTANGLE
+        add.l   #SIZE_OF_DRAW_CLIP_RECT_PARAMS, sp
+        
+        move.l  #Char_StartX, d4
+        move.l  #Char_StartY, d5
+        
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)
+        move.l  Char_ImageData, -(sp)
+        JSR     DRAW_PHYSICS_BODY
+        add.l   #SIZE_OF_DRAW_BODY_PARAMS, sp
+
+        lea     GameDescription, a1
+        move.w  #200, d1
+        move.w  #500, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
+        
+        * repaint buffer on main screen
+        JSR     REPAINT
+        RTS
+
+GAME_OVER:
+        move.w  #$FF00, d1
+        move.b  #CMD_CLEAR_SCREEN, d0
+        TRAP    #15
+
+        * display game over text
+        lea     GameOverText, a1
+        move.w  #STAGE_WIDTH/2-100, d1
+        move.w  #STAGE_HEIGHT/2, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
+        
+        move.w  #0, -(sp)               ; padding to make even
+        move.w  NumBoxes, -(sp)
+        JSR     DRAW_SCORE
+        add.l   #4, sp
+        
+        JSR     REPAINT
         RTS
 
 *********************************************************************
@@ -1335,6 +1378,16 @@ PARAM_BMP_LX            EQU     52
 PARAM_BMP_UY            EQU     48
 PARAM_BMP_RX            EQU     44
 PARAM_BMP_LY            EQU     40
+
+PARAM_FALLING_X         EQU     24
+PARAM_FALLING_Y         EQU     20
+PARAM_FALLING_PTR       EQU     16
+
+PARAM_GRAV_X            EQU     40
+PARAM_GRAV_PTR_YVEL     EQU     36
+PARAM_GRAV_PTR_FALLING  EQU     32
+PARAM_GRAV_PTR_Y        EQU     28
+
 *-------------------
 * Size of Paramerters of a Subroutine
 *-------------------
@@ -1343,6 +1396,9 @@ SIZE_OF_DRAW_DIGIT_PARAMS       EQU     8
 SIZE_OF_DRAW_SEGMENT_PARAMS     EQU     4
 SIZE_OF_GET_TOP_BOX_PARAMS      EQU     8
 SIZE_OF_GET_MAP_STATUS_PARAMS   EQU     8
+SIZE_OF_IS_FALLING_PARAMS       EQU     12
+SIZE_OF_DRAW_BODY_PARAMS        EQU     12
+SIZE_OF_DRAW_CLIP_RECT_PARAMS   EQU     16
 
         END     START
         

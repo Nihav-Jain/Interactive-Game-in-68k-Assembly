@@ -1248,7 +1248,7 @@ KEY_COMBO               EQU     $00262527
 * Background Bitmap file descriptors
 *-------------------
 LifeSaver01         ds.l    0
-BitmapData          INCBIN  "images/inside-a-factory.bmp"
+BitmapData          INCBIN  "images/factory.bmp"
 
 ImageDataOffset     EQU     (BitmapData+10)      ; LONG
 ImageWidth          EQU     (ImageDataOffset+8)  ; LONG

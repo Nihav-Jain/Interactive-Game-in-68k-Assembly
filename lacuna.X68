@@ -133,19 +133,8 @@ GAME_LOOP:
         lea     AllBoxes, a1
     APPLY_GRAVITY_ON_BOXES:
         cmpa.l  LastBox, a1
-        bge     APPLY_GRAVITY_ON_CHARACTER
-        move.l  (a1), 8(a1)         ; move curX into oldX
-        move.l  4(a1), 12(a1)       ; move curY into oldY
-        move.l  (a1), -(sp)       ; pointer to curX
-        add.l   #16, a1
-        move.l  a1, -(sp)
-        add.l   #4, a1
-        move.l  a1, -(sp)
-        sub.l   #16, a1
-        move.l  a1, -(sp)
-        sub.l   #4, a1
-        JSR     APPLY_GRAVITY
-        add.l   #16, sp
+        bge     CHARACTER_UPDATE
+        JSR     UPDATE_BOX_PHYSICS
         
         move.l  8(a1), d6
         cmp.l   (a1), d6
@@ -153,25 +142,9 @@ GAME_LOOP:
         move.l  12(a1), d6
         cmp.l   4(a1), d6
         beq     NEXT_BOX
-    REDRAW_BACKGROUND_FOR_BOX:
-        move.l  a1, -(sp)
-        JSR     UPDATE_MAP
-        add.l   #4, sp
+        JSR     UPDATE_BOX_GRAPHICS
         
-        move.l  8(a1), -(sp)
-        move.l  12(a1), -(sp)
-        add.l   #GRID_WIDTH, 8(a1)
-        add.l   #GRID_HEIGHT, 12(a1)
-        move.l  8(a1), -(sp)
-        move.l  12(a1), -(sp)
-        JSR     DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
-        add.l   #16, sp
-    REDRAW_BOX:
-        move.l  (a1), -(sp)
-        move.l  4(a1), -(sp)
-        move.l  Box_ImageData, -(sp)
-        JSR     DRAW_PHYSICS_BODY
-        add.l   #12, sp
+    CHECK_DEATH:
         move.l  Char_CurX, d4
         move.l  Char_CurY, d5
         sub.l   (a1), d4
@@ -188,13 +161,13 @@ GAME_LOOP:
         add.l   #BOX_OBJ_SIZE, a1
         bra     APPLY_GRAVITY_ON_BOXES
         
-    APPLY_GRAVITY_ON_CHARACTER:
+    CHARACTER_UPDATE:
         JSR     UPDATE_CHARACTER
-                
-    REPAINT_FRAME:        
+
         JSR     REPAINT
         
         bra GAME_LOOP
+    *GAME LOOP ENDS*
     
     EXIT_GAME_LOOP:
         JSR     GAME_OVER
@@ -876,6 +849,43 @@ UPDATE_CHARACTER_GRAPHICS:
         JSR     DRAW_PHYSICS_BODY
         add.l   #SIZE_OF_DRAW_BODY_PARAMS, sp
         
+        RTS
+        
+UPDATE_BOX_PHYSICS:
+        move.l  (a1), 8(a1)         ; move curX into oldX
+        move.l  4(a1), 12(a1)       ; move curY into oldY
+        move.l  (a1), -(sp)       ; pointer to curX
+        add.l   #16, a1
+        move.l  a1, -(sp)
+        add.l   #4, a1
+        move.l  a1, -(sp)
+        sub.l   #16, a1
+        move.l  a1, -(sp)
+        sub.l   #4, a1
+        JSR     APPLY_GRAVITY
+        add.l   #16, sp
+        RTS        
+        
+UPDATE_BOX_GRAPHICS:
+    REDRAW_BACKGROUND_FOR_BOX:
+        move.l  a1, -(sp)
+        JSR     UPDATE_MAP
+        add.l   #4, sp
+        
+        move.l  8(a1), -(sp)
+        move.l  12(a1), -(sp)
+        add.l   #GRID_WIDTH, 8(a1)
+        add.l   #GRID_HEIGHT, 12(a1)
+        move.l  8(a1), -(sp)
+        move.l  12(a1), -(sp)
+        JSR     DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
+        add.l   #16, sp
+    REDRAW_BOX:
+        move.l  (a1), -(sp)
+        move.l  4(a1), -(sp)
+        move.l  Box_ImageData, -(sp)
+        JSR     DRAW_PHYSICS_BODY
+        add.l   #12, sp
         RTS
 
 GAME_OVER:

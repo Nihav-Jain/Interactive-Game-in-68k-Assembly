@@ -186,11 +186,29 @@ CAN_MOVE_RIGHT:
         JSR     GET_MAP_STATUS
         add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
         
-        subi.l  #GRID_WIDTH, d4
+        *subi.l  #GRID_WIDTH, d4
         lea     GameMap, a5
         add.l   d3, a5                  ; add cell offset to GameMap pointer
         cmpi.l  #0, (a5)                ; check if cell is empty
         bne     CANT_MOVE_RIGHT
+        
+        move.l  d5, d3
+        divu    #GRID_HEIGHT, d3
+        andi.l  #$FFFF0000, d3
+        beq     UPDATE_MOVE_LEFT_FLAG
+        lsr.l   #5, d5
+        addi.l  #1, d5
+        lsl.l   #5, d5
+        * get status of grid with updated coordinates
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)
+        JSR     GET_MAP_STATUS
+        add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
+        lea     GameMap, a5
+        add.l   d3, a5                  ; add cell offset to GameMap pointer
+        cmpi.l  #0, (a5)                ; check if cell is empty
+        bne     CANT_MOVE_RIGHT
+    UPDATE_MOVE_RIGHT_FLAG:
         move.b  #1, CanMove
     CANT_MOVE_RIGHT:
         movem.l (sp)+, REG_CAN_MOVE
@@ -927,21 +945,21 @@ UPDATE_BOX_GRAPHICS:
         RTS
 
 GAME_OVER:
-        move.w  #$FF00, d1
-        move.b  #CMD_CLEAR_SCREEN, d0
-        TRAP    #15
+*        move.w  #$FF00, d1
+*        move.b  #CMD_CLEAR_SCREEN, d0
+*        TRAP    #15
 
         * display game over text
         lea     GameOverText, a1
         move.w  #STAGE_WIDTH/2-200, d1
-        move.w  #STAGE_HEIGHT/2, d2
+        move.w  #STAGE_HEIGHT-20, d2
         move.b  #CMD_DRAW_STRING, d0
         TRAP    #15
         
-        move.w  #0, -(sp)               ; padding to make even
-        move.w  NumBoxes, -(sp)
-        JSR     DRAW_SCORE
-        add.l   #SIZE_OF_DRAW_SCORE_PARAMS, sp
+*        move.w  #0, -(sp)               ; padding to make even
+*        move.w  NumBoxes, -(sp)
+*        JSR     DRAW_SCORE
+*        add.l   #SIZE_OF_DRAW_SCORE_PARAMS, sp
         
         JSR     REPAINT
         RTS

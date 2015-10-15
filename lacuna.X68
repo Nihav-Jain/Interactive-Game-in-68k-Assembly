@@ -125,8 +125,12 @@ GAME_LOOP:
 
         JSR     CAN_MOVE_LEFT
         cmpi.b  #0, CanMove
-        beq     UPDATE
+        beq     SNAP_TO_LEFT
         sub.l   d2, d4
+        bra     UPDATE
+    SNAP_TO_LEFT:
+        lsr.l   #5, d4
+        lsl.l   #5, d4
         bra     UPDATE
     MOVE_RIGHT:
         mulu    d6, d2
@@ -134,9 +138,18 @@ GAME_LOOP:
 
         JSR     CAN_MOVE_RIGHT
         cmpi.b  #0, CanMove
+        bne     ADD_DISPLACEMENT
+    SNAP_TO_RIGHT:
+        move.l  d4, d1
+        divu    #32, d1
+        andi.l  #$FFFF0000, d1
         beq     UPDATE
+        lsr.l   #5, d4
+        addi.b  #1, d4
+        lsl.l   #5, d4
+        bra     UPDATE
+    ADD_DISPLACEMENT:
         add.l   d2, d4
-        
     UPDATE:
         move.l  CurTimeDiff, d2
         

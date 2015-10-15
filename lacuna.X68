@@ -1221,29 +1221,28 @@ GameDescription     dc.b    'Avoid the falling blocks',0
 *-------------------
 CMD_SET_PEN_COLOR       EQU     80
 CMD_SET_FILL_COLOR      EQU     81
-CMD_DRAW_PIXEL      EQU     82
-CMD_DRAW_LINE       EQU     84
-CMD_DRAW_RECT       EQU     87
-CMD_OUTPUT_RES      EQU     33
-CMD_CLEAR_SCREEN    EQU     11
-CMD_DRAW_STRING     EQU     95
-CMD_DBL_BUFFER      EQU     92
-CMD_REPAINT         EQU     94
-CMD_KEY_DOWN_EVENT  EQU     19
-CMD_GET_TIME        EQU     8
-CMD_GET_CYCLES      EQU     31
+CMD_DRAW_PIXEL          EQU     82
+CMD_DRAW_LINE           EQU     84
+CMD_DRAW_RECT           EQU     87
+CMD_OUTPUT_RES          EQU     33
+CMD_CLEAR_SCREEN        EQU     11
+CMD_DRAW_STRING         EQU     95
+CMD_DBL_BUFFER          EQU     92
+CMD_REPAINT             EQU     94
+CMD_KEY_DOWN_EVENT      EQU     19
+CMD_GET_TIME            EQU     8
+CMD_GET_CYCLES          EQU     31
 
-DBL_BUFFER_ON       EQU     17
-DBL_BUFFER_OFF      EQU     16
+DBL_BUFFER_ON           EQU     17
 
 *-------------------
 * Key codes
 *-------------------
-KEY_LEFT_ARROW      EQU     $25
-KEY_UP_ARROW        EQU     $26
-KEY_RIGHT_ARROW     EQU     $27
-KEY_SPACEBAR        EQU     $20
-KEY_COMBO           EQU     $00262527
+KEY_LEFT_ARROW          EQU     $25
+KEY_UP_ARROW            EQU     $26
+KEY_RIGHT_ARROW         EQU     $27
+KEY_SPACEBAR            EQU     $20
+KEY_COMBO               EQU     $00262527
 
 *-------------------
 * Background Bitmap file descriptors
@@ -1280,12 +1279,17 @@ Char_ImageData      ds.l    1
 Char_Height         ds.l    1
 Char_Width          ds.l    1   ; corresponds to number of bytes per row
 Char_ActualWidth    dc.l    32
+Char_CurX           dc.l    Char_StartX
+Char_CurY           dc.l    Char_StartY
+Char_OldX           dc.l    Char_StartX
+Char_OldY           dc.l    Char_StartY
+
 
 *-------------------
 * Box Bitmap file descriptors
 *-------------------
 LifeSaver03         ds.l    0
-BoxBitmapData       INCBIN  "images/crate.bmp"
+BoxBitmapData       INCBIN  "images/crate2.bmp"
 
 BoxImageDataOffset  EQU     (BoxBitmapData+10)      ; LONG
 BoxImageWidth       EQU     (BoxImageDataOffset+8)  ; LONG
@@ -1299,7 +1303,7 @@ Box_ActualWidth     dc.l    32
 MAX_BOXES           EQU     240
 MIN_STACKED_BOX_Y   EQU     128
 
-BOX_OBJ_SIZE        EQU     22
+BOX_OBJ_SIZE        EQU     22   ; (LONG)curX, (LONG)curY, (LONG)oldX, (LONG)oldY, (LONG)yVelocity, (BYTE)isFalling, (BYTE)isPickedUp
 BOX_CUR_X           EQU     0
 BOX_CUR_Y           EQU     4
 BOX_OLD_X           EQU     8
@@ -1309,7 +1313,7 @@ BOX_IS_FALLING      EQU     20
 BOX_IS_PICKED       EQU     21
 
 LifeSaver04         ds.l    0
-AllBoxes            ds.b    BOX_OBJ_SIZE*MAX_BOXES    ; curX, curY, oldX, oldY, yVelocity, isFalling, isPickedUp
+AllBoxes            ds.b    BOX_OBJ_SIZE*MAX_BOXES
 NumBoxes            dc.w    0
 LastBox             dc.l    AllBoxes
 BoxGenerationTimer  dc.l    0
@@ -1333,15 +1337,6 @@ Char_YVelocity      dc.l    0
 RandomNumber        dc.l    RANDOM_SMALL
 RandomColumn        dc.l    0
 CopyOfPrevTime      dc.l    0
-
-*-------------------
-* Graphics pipeline
-*-------------------
-Char_CurX               dc.l    Char_StartX
-Char_CurY               dc.l    Char_StartY
-Char_OldX               dc.l    Char_StartX
-Char_OldY               dc.l    Char_StartY
-
 
 *-------------------
 * 7 segment LED

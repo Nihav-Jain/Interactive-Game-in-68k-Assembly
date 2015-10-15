@@ -127,9 +127,9 @@ GAME_LOOP:
         move.l  d5, Char_CurY
         move.l  d4, Char_CurX
         
+        cmpi.w  #MAX_BOXES, NumBoxes
+        bge     GAME_OVER
     UPDATE_BOXES:
-*        cmpi.l  #MAX_BOXES, NumBoxes
-*        bge     GAME_OVER
         lea     AllBoxes, a1
     APPLY_GRAVITY_ON_BOXES:
         cmpa.l  LastBox, a1

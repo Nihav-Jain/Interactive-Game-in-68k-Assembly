@@ -922,7 +922,7 @@ GAME_OVER:
 
         * display game over text
         lea     GameOverText, a1
-        move.w  #STAGE_WIDTH/2-100, d1
+        move.w  #STAGE_WIDTH/2-200, d1
         move.w  #STAGE_HEIGHT/2, d2
         move.b  #CMD_DRAW_STRING, d0
         TRAP    #15
@@ -1240,7 +1240,7 @@ GRID_HEIGHT         EQU     32
 GameTitle           dc.b    'Avoid and Evade',0
 StartGameText       dc.b    'Press Space To Start',0
 LoadingText         dc.b    'Loading...', 0
-GameOverText        dc.b    'Game Over, Your Score:',0
+GameOverText        dc.b    'Game Over, Your Score is in the bottom right corner',0
 GameDescription     dc.b    'Avoid the falling blocks',0
 
 *-------------------
@@ -1346,7 +1346,7 @@ LastBox             dc.l    AllBoxes
 BoxGenerationTimer  dc.l    0
 
 *-------------------
-* Physics
+* Gameplay
 *-------------------
 MAP_ROWS            EQU     20
 MAP_COLS            EQU     15

@@ -15,6 +15,7 @@ ALL_BMP_DRAW_REGS   REG     D0-D7/A0
 REG_DRAW_SCORE      REG     d0-d4/d6-d7
 REG_DRAW_DIGIT      REG     d0-d7/a3-a5
 REG_DRAW_SEGMENT    REG     d0-d4
+REG_GENERATE_RANDOM REG     d0/d1
 *-------------------
 * MAIN
 *-------------------
@@ -609,17 +610,17 @@ DRAW_CHARACTER:
 PROCESS_BACKGROUND_BITMAP:
 
         move.l  ImageDataOffset, d5
-        JSR     SR_SWAP_LONG
+        JSR     SWAP_LONG
         lea     BitmapData, a0
         adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
         move.l  a0, BG_ImageData
         
         move.l  ImageHeight, d5
-        JSR     SR_SWAP_LONG
+        JSR     SWAP_LONG
         move.l  d5, BG_Height
         
         move.l  ImageWidth, d5
-        JSR     SR_SWAP_LONG
+        JSR     SWAP_LONG
         mulu    #BitsPerPixel, d5
         addi.l  #31, d5
         lsr.l   #5, d5                  ; d5 = d5 / 32
@@ -633,17 +634,17 @@ PROCESS_BACKGROUND_BITMAP:
 PROCESS_CHARACTER_BITMAP:
 
         move.l  CharImageDataOffset, d5
-        JSR     SR_SWAP_LONG
+        JSR     SWAP_LONG
         lea     CharBitmapData, a0
         adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
         move.l  a0, Char_ImageData
         
         move.l  CharImageHeight, d5
-        JSR     SR_SWAP_LONG
+        JSR     SWAP_LONG
         move.l  d5, Char_Height
         
         move.l  CharImageWidth, d5
-        JSR     SR_SWAP_LONG        
+        JSR     SWAP_LONG        
         mulu    #BitsPerPixel, d5
         addi.l  #31, d5
         lsr.l   #5, d5                  ; d5 = d5 / 32
@@ -657,17 +658,17 @@ PROCESS_CHARACTER_BITMAP:
 PROCESS_BOX_BITMAP:
 
         move.l  BoxImageDataOffset, d5
-        JSR     SR_SWAP_LONG
+        JSR     SWAP_LONG
         lea     BoxBitmapData, a0
         adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
         move.l  a0, Box_ImageData
         
         move.l  BoxImageHeight, d5
-        JSR     SR_SWAP_LONG
+        JSR     SWAP_LONG
         move.l  d5, Box_Height
         
         move.l  BoxImageWidth, d5
-        JSR     SR_SWAP_LONG        
+        JSR     SWAP_LONG        
         mulu    #BitsPerPixel, d5
         addi.l  #31, d5
         lsr.l   #5, d5                  ; d5 = d5 / 32
@@ -794,16 +795,22 @@ ADD_BOX:
 *                   UTILITY SUBROUTINES                             *
 *********************************************************************
 
+*-------------------
+* Seeds the random number generato
+*-------------------
 SEED_RANDOM_NUMBER:
         movem.l d6, -(sp)
-        move.l  d1, d6
+        move.l  d1, d6              ; d1 = current time
         mulu    #RANDOM_LARGE, d6
         move.l  d6, RandomNumber
         movem.l (sp)+, d6
         RTS
-        
+
+*-------------------
+* Generates a random number modulo 20 (to get column number for newly added box)
+*-------------------
 GENERATE_RANDOM_MOD_20:
-        movem.l d0/d1, -(sp)
+        movem.l REG_GENERATE_RANDOM, -(sp)
         move.l  RandomNumber, d6
         mulu    #RANDOM_LARGE, d6
         move.l  #CMD_GET_CYCLES, d0
@@ -813,23 +820,23 @@ GENERATE_RANDOM_MOD_20:
         add.l   #1, d6
     NO_RANDOM_CARRY:
         move.l  d6, RandomNumber
-        divu    #20, d6
+        divu    #MAP_ROWS, d6
         clr.w   d6
         swap    d6
-        cmpi.l  #20, d6
+        cmpi.l  #MAP_ROWS, d6
         blt     RETURN_FROM_HERE
-        divu    #20, d6
+        divu    #MAP_ROWS, d6
         clr.w   d6
         swap    d6
         move.l  d6, RandomColumn
     RETURN_FROM_HERE:
-        movem.l (sp)+, d0/d1
+        movem.l (sp)+, REG_GENERATE_RANDOM
         RTS    
         
 *-------------------
-* Subroutine: Swaps the bytes of the lower word in d5
+* Swaps the bytes of the lower word in d5
 *-------------------
-SR_SWAP_WORD:
+SWAP_WORD:
         movem.l d6, -(sp)
         clr.w   d6
         move.b  d5, d6
@@ -841,12 +848,12 @@ SR_SWAP_WORD:
         
         
 *-------------------
-* Subroutine: Swaps the bytes of the long word in d5
+* Swaps the bytes of the long word in d5
 *-------------------
-SR_SWAP_LONG:
-        JSR     SR_SWAP_WORD
+SWAP_LONG:
+        JSR     SWAP_WORD
         swap    d5
-        JSR     SR_SWAP_WORD
+        JSR     SWAP_WORD
         RTS
 
 *********************************************************************
@@ -860,7 +867,7 @@ SR_SWAP_LONG:
 DRAW_SCORE:
         movem.l REG_DRAW_SCORE, -(sp)
         
-        move.l  #$00000000, d1              ; fill color for scorecard background
+        move.l  #SCOREBOARD_FILL_COLOR, d1  ; fill color for scorecard background
         move.b  #CMD_SET_FILL_COLOR, d0
         TRAP    #15
         
@@ -871,7 +878,7 @@ DRAW_SCORE:
         move.b  #CMD_DRAW_RECT, d0          ; draw scorecard background
         TRAP    #15
                 
-        move.l  #$00FFFFFF, d1              ; pen color for LED segments
+        move.l  #SCOREBOARD_PEN_COLOR, d1   ; pen color for LED segments
         move.b  #CMD_SET_PEN_COLOR, d0
         TRAP    #15
         
@@ -1216,21 +1223,24 @@ Char_OldY               dc.l    Char_StartY
 *-------------------
 * 7 segment LED
 *-------------------
-SCOREBOARD_LX           EQU     0
+SCOREBOARD_FILL_COLOR   EQU     $00000000
+SCOREBOARD_PEN_COLOR    EQU     $00FFFFFF
+
+SCOREBOARD_LX           EQU     10
 SCOREBOARD_UY           EQU     490
-SCOREBOARD_RX           EQU     60
+SCOREBOARD_RX           EQU     70
 SCOREBOARD_LY           EQU     530
  
 SEGMENT_LENGTH          EQU     10
 NUM_SEGMENTS            EQU     7
         
-HUNDREDS_DIGIT_X        EQU     10
+HUNDREDS_DIGIT_X        EQU     20
 HUNDREDS_DIGIT_Y        EQU     500
 
-TENS_DIGIT_X            EQU     25
+TENS_DIGIT_X            EQU     35
 TENS_DIGIT_Y            EQU     500
 
-UNITS_DIGIT_X           EQU     40
+UNITS_DIGIT_X           EQU     50
 UNITS_DIGIT_Y           EQU     500
 
 DigitToSegments         dc.b    %01111110   ; 0

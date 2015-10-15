@@ -189,31 +189,7 @@ GAME_LOOP:
         bra     APPLY_GRAVITY_ON_BOXES
         
     APPLY_GRAVITY_ON_CHARACTER:
-        move.l  Char_CurX, d4
-        move.l  Char_CurY, d5
-        move.l  d4, -(sp)
-        move.l  #Char_YVelocity, -(sp)
-        move.l  #IsFalling, -(sp)
-        move.l  #Char_CurY, -(sp)
-        JSR     APPLY_GRAVITY
-        add.l   #16, sp
-        move.l  Char_CurY, d5
-    REDRAW_BACKGROUND_FOR_CHARACTER:        
-        move.l  Char_OldX, -(sp)
-        move.l  Char_OldY, -(sp)
-        add.l   #GRID_WIDTH, Char_OldX
-        add.l   #GRID_HEIGHT, Char_OldY
-        move.l  Char_OldX, -(sp)
-        move.l  Char_OldY, -(sp)
-        JSR     DRAW_CLIP_RECTANGLE      ; change subroutine to accept only top-left x and y and draw to GRID_WIDTH and GRID_HEIGHT
-        add.l   #16, sp
-        
-    REDRAW_CHARACTER:
-        move.l  d4, -(sp)
-        move.l  d5, -(sp)
-        move.l  Char_ImageData, -(sp)
-        JSR     DRAW_PHYSICS_BODY
-        add.l   #12, sp
+        JSR     UPDATE_CHARACTER
                 
     REPAINT_FRAME:        
         JSR     REPAINT
@@ -861,6 +837,46 @@ INITIALIZE:
         * repaint buffer on main screen
         JSR     REPAINT
         RTS
+        
+UPDATE_CHARACTER:
+        JSR     UPDATE_CHARACTER_PHYSICS
+        JSR     UPDATE_CHARACTER_GRAPHICS
+        RTS
+        
+UPDATE_CHARACTER_PHYSICS:
+        move.l  Char_CurX, d4
+        move.l  Char_CurY, d5
+        
+        move.l  d4, -(sp)
+        move.l  #Char_YVelocity, -(sp)
+        move.l  #IsFalling, -(sp)
+        move.l  #Char_CurY, -(sp)
+        JSR     APPLY_GRAVITY
+        add.l   #SIZE_OF_APPLY_GRAV_PARAMS, sp
+        
+        move.l  Char_CurY, d5
+        RTS
+        
+UPDATE_CHARACTER_GRAPHICS:
+
+    REDRAW_BACKGROUND_FOR_CHARACTER:        
+        move.l  Char_OldX, -(sp)
+        move.l  Char_OldY, -(sp)
+        add.l   #GRID_WIDTH, Char_OldX
+        add.l   #GRID_HEIGHT, Char_OldY
+        move.l  Char_OldX, -(sp)
+        move.l  Char_OldY, -(sp)
+        JSR     DRAW_CLIP_RECTANGLE
+        add.l   #SIZE_OF_DRAW_CLIP_RECT_PARAMS, sp
+        
+    REDRAW_CHARACTER:
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)
+        move.l  Char_ImageData, -(sp)
+        JSR     DRAW_PHYSICS_BODY
+        add.l   #SIZE_OF_DRAW_BODY_PARAMS, sp
+        
+        RTS
 
 GAME_OVER:
         move.w  #$FF00, d1
@@ -1418,6 +1434,7 @@ SIZE_OF_DRAW_CLIP_RECT_PARAMS   EQU     16
         
 
         
+
 
 
 

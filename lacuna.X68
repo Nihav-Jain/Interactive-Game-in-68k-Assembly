@@ -1,8 +1,9 @@
 *-----------------------------------------------------------
 * Program Number: 3
 * Written by    : Nihav Jain
-* Date Created  : 10/01/2015
-* Description   : Interactive Game
+* Date Created  : 10/01/2015 - 10/15/2015
+* Title         : Avoid and Evade
+* Description   : Avoid the falling blocks
 *-----------------------------------------------------------
 
 ALL_REGS            REG     D0-D7/A0-A6
@@ -28,7 +29,7 @@ START   ORG     $1000
 
         * display start game text
         lea     StartGameText, a1
-        move.w  #STAGE_WIDTH/2-100, d1
+        move.w  #STAGE_WIDTH/2-80, d1
         move.w  #STAGE_HEIGHT/2+40, d2
         move.b  #CMD_DRAW_STRING, d0
         TRAP    #15
@@ -63,10 +64,6 @@ START   ORG     $1000
         JSR     SR_DRAW_CLIP_RECTANGLE
         add.l   #16, sp
         
-        * repaint buffer on main screen
-        move.b  #CMD_REPAINT, d0
-        TRAP    #15
-        
         JSR     PROCESS_BOX_BITMAP
         JSR     PROCESS_CHARACTER_BITMAP
         move.l  #Char_StartX, d4
@@ -77,6 +74,12 @@ START   ORG     $1000
         move.l  Char_ImageData, -(sp)
         JSR     DRAW_CHARACTER
         add.l   #12, sp
+
+        lea     GameDescription, a1
+        move.w  #200, d1
+        move.w  #500, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
         
         * repaint buffer on main screen
         JSR     REPAINT
@@ -1043,6 +1046,7 @@ GameTitle           dc.b    'Avoid and Evade',0
 StartGameText       dc.b    'Press Space To Start',0
 LoadingText         dc.b    'Loading...', 0
 GameOverText        dc.b    'Game Over, Your Score:',0
+GameDescription     dc.b    'Avoid the falling blocks',0
 
 *-------------------
 * Trap codes

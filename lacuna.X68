@@ -23,7 +23,7 @@ REG_UPDATE_MAP      REG     d3-d4/a1-a2
 
 REG_IS_FALLING      REG     d4/d5/a6
 REG_APPLY_GRAVITY   REG     d2-d3/d5/a1-a3
-REG_CAN_MOVE        REG     d3/d4/a5
+REG_CAN_MOVE        REG     d3/d4/d5/a5
 *-------------------
 * MAIN
 *-------------------
@@ -146,23 +146,23 @@ CAN_MOVE_LEFT:
         cmpi.l  #0, (a5)                ; check if cell is empty
         bne     CANT_MOVE_LEFT
         
-*        move.l  d5, d3
-*        divu    #GRID_HEIGHT, d3
-*        move.l  d3, d5
-*        andi.l  #$FFFF0000, d3
-*        beq     UPDATE_MOVE_LEFT_FLAG
-*        addi.l  #1, d5
-*        lsl.l   #5, d5
-*        * get status of grid with updated coordinates
-*        lea     GameMap, a5
-*        move.l  d4, -(sp)
-*        move.l  d5, -(sp)
-*        JSR     GET_MAP_STATUS
-*        add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
-*        add.l   d3, a5                  ; add cell offset to GameMap pointer
-*        cmpi.l  #0, (a5)                ; check if cell is empty
-*        bne     CANT_MOVE_LEFT
-    UPDATE_MOVE_LEFT_FLAG:    
+        move.l  d5, d3
+        divu    #GRID_HEIGHT, d3
+        andi.l  #$FFFF0000, d3
+        beq     UPDATE_MOVE_LEFT_FLAG
+        lsr.l   #5, d5
+        addi.l  #1, d5
+        lsl.l   #5, d5
+        * get status of grid with updated coordinates
+        move.l  d4, -(sp)
+        move.l  d5, -(sp)
+        JSR     GET_MAP_STATUS
+        add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
+        lea     GameMap, a5
+        add.l   d3, a5                  ; add cell offset to GameMap pointer
+        cmpi.l  #0, (a5)                ; check if cell is empty
+        bne     CANT_MOVE_LEFT
+    UPDATE_MOVE_LEFT_FLAG:
         move.b  #1, CanMove
     CANT_MOVE_LEFT:
         movem.l (sp)+, REG_CAN_MOVE
@@ -707,7 +707,7 @@ INTRODUCTION:
 
         * display start game text
         lea     StartGameText, a1
-        move.w  #STAGE_WIDTH/2-80, d1
+        move.w  #STAGE_WIDTH/2-200, d1
         move.w  #STAGE_HEIGHT/2+40, d2
         move.b  #CMD_DRAW_STRING, d0
         TRAP    #15
@@ -1249,10 +1249,10 @@ STAGE_HEIGHT        EQU     480
 GRID_WIDTH          EQU     32
 GRID_HEIGHT         EQU     32
 GameTitle           dc.b    'Avoid and Evade',0
-StartGameText       dc.b    'Press Space To Start',0
+StartGameText       dc.b    'Press Space To Start, use Arrow Keys to control player',0
 LoadingText         dc.b    'Loading...', 0
 GameOverText        dc.b    'Game Over, Your Score is in the bottom right corner',0
-GameDescription     dc.b    'Avoid the falling blocks',0
+GameDescription     dc.b    'Avoid the falling blocks, use Arrow Keys to navigate',0
 
 *-------------------
 * Trap codes
@@ -1286,7 +1286,7 @@ KEY_COMBO               EQU     $00262527
 * Background Bitmap file descriptors
 *-------------------
 LifeSaver01         ds.l    0
-BitmapData          INCBIN  "images/factory.bmp"
+BitmapData          INCBIN  "factory.bmp"
 
 ImageDataOffset     EQU     (BitmapData+10)      ; LONG
 ImageWidth          EQU     (ImageDataOffset+8)  ; LONG
@@ -1301,7 +1301,7 @@ BG_Width            ds.l    1   ; corresponds to number of bytes per row
 * Character Bitmap file descriptors
 *-------------------
 LifeSaver02         ds.l    0
-CharBitmapData      INCBIN  "images/alien.bmp"
+CharBitmapData      INCBIN  "alien.bmp"
 
 CharImageDataOffset EQU     (CharBitmapData+10)      ; LONG
 CharImageWidth      EQU     (CharImageDataOffset+8)  ; LONG
@@ -1327,7 +1327,7 @@ Char_Alive          dc.b    1
 * Box Bitmap file descriptors
 *-------------------
 LifeSaver03         ds.l    0
-BoxBitmapData       INCBIN  "images/crate2.bmp"
+BoxBitmapData       INCBIN  "crate2.bmp"
 
 BoxImageDataOffset  EQU     (BoxBitmapData+10)      ; LONG
 BoxImageWidth       EQU     (BoxImageDataOffset+8)  ; LONG
@@ -1477,6 +1477,7 @@ SIZE_OF_DRAW_CLIP_RECT_PARAMS   EQU     16
         
 
         
+
 
 
 

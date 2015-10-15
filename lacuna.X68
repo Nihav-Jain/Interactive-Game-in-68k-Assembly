@@ -138,10 +138,11 @@ GAME_LOOP:
         
         move.l  8(a1), d6
         cmp.l   (a1), d6
-        bne     REDRAW_BACKGROUND_FOR_BOX
+        bne     BOX_GRAPHICS_UPDATE
         move.l  12(a1), d6
         cmp.l   4(a1), d6
         beq     NEXT_BOX
+    BOX_GRAPHICS_UPDATE:
         JSR     UPDATE_BOX_GRAPHICS
         
     CHECK_DEATH:
@@ -163,9 +164,7 @@ GAME_LOOP:
         
     CHARACTER_UPDATE:
         JSR     UPDATE_CHARACTER
-
         JSR     REPAINT
-        
         bra GAME_LOOP
     *GAME LOOP ENDS*
     

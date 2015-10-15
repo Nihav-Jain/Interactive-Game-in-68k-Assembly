@@ -151,6 +151,8 @@ GAME_LOOP:
         add.l   d2, d4
     UPDATE:
         move.l  CurTimeDiff, d2
+        move.l  d5, Char_CurY
+        move.l  d4, Char_CurX
         
     UPDATE_BOXES:
         lea     AllBoxes, a1
@@ -195,13 +197,25 @@ GAME_LOOP:
         move.l  Box_ImageData, -(sp)
         JSR     DRAW_CHARACTER
         add.l   #12, sp
+        move.l  Char_CurX, d4
+        move.l  Char_CurY, d5
+        sub.l   (a1), d4
+        cmpi.l  #-GRID_WIDTH, d4
+        ble     NEXT_BOX
+        cmpi.l  #GRID_WIDTH, d4
+        bge     NEXT_BOX
+        sub.l   4(a1), d5
+        cmpi.l  #0, d5
+        blt     NEXT_BOX
+        cmpi.l  #GRID_HEIGHT, d5
+        blt     GAME_OVER
     NEXT_BOX:
         add.l   #BOX_OBJ_SIZE, a1
         bra     APPLY_GRAVITY_ON_BOXES
         
-    APPLY_GRAVITY_ON_CHARACTER:    
-        move.l  d5, Char_CurY
-        move.l  d4, Char_CurX
+    APPLY_GRAVITY_ON_CHARACTER:
+        move.l  Char_CurX, d4
+        move.l  Char_CurY, d5
         move.l  d4, -(sp)
         move.l  #Char_YVelocity, -(sp)
         move.l  #IsFalling, -(sp)
@@ -232,6 +246,26 @@ GAME_LOOP:
         TRAP    #15
         
         bra GAME_LOOP
+        
+    GAME_OVER:
+        move.w  #$FF00, d1
+        move.b  #CMD_CLEAR_SCREEN, d0
+        TRAP    #15
+
+        * display game over text
+        lea     GameOverText, a1
+        move.w  #STAGE_WIDTH/2-100, d1
+        move.w  #STAGE_HEIGHT/2, d2
+        move.b  #CMD_DRAW_STRING, d0
+        TRAP    #15
+        
+        move.w  #0, -(sp)               ; padding to make even
+        move.w  NumBoxes, -(sp)
+        JSR     DRAW_SCORE
+        add.l   #4, sp
+        
+        move.b  #CMD_REPAINT, d0
+        TRAP    #15
         
         move.b  $9,d0
         TRAP    #15
@@ -983,6 +1017,7 @@ STAGE_HEIGHT        EQU     480
 GRID_WIDTH          EQU     32
 GRID_HEIGHT         EQU     32
 LoadingText         dc.b    'Loading...', 0
+GameOverText        dc.b    'Game Over, Your Score:',0
 
 *-------------------
 * Trap codes

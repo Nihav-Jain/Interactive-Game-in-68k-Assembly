@@ -55,7 +55,7 @@ GAME_LOOP:
         move.l  d2, CurTimeDiff
     ADD_NEW_BOX:
         add.l   d2, BoxGenerationTimer
-        cmpi.l  #200, BoxGenerationTimer
+        cmpi.l  #200, BoxGenerationTimer          ; add a new box every 2 seconds
         blt     GET_INPUT
         JSR     ADD_BOX
         move.l  #0, BoxGenerationTimer
@@ -74,35 +74,37 @@ GAME_LOOP:
         move.l  d5, -(sp)
         move.l  #IsFalling, -(sp)
         JSR     IS_FALLING
-        add.l   #12, sp
+        add.l   #SIZE_OF_IS_FALLING_PARAMS, sp
+        
         move.l  CopyOfPrevTime, d3
-        cmpi.b  #1, IsFalling
+        cmpi.b  #1, IsFalling                               ; if character is in air, dont allow new jump
         beq     UPDATE
         move.l  #Char_JumpVelocity, Char_YVelocity
         move.b  #1, IsJumping
     CHECK_RIGHT_KEY:
         move.l  d7, d1
-        andi.b  #$FF, d1                ; copy in d7
+        andi.b  #$FF, d1
         beq     CHECK_LEFT_KEY
         addi.l  #Char_XVelocity, d6
+        bra     MOVE_RIGHT
     CHECK_LEFT_KEY:
         move.l  d7, d1
         andi.w  #$FF00, d1
-        beq     MOVE_RIGHT
+        beq     UPDATE
         addi.l  #Char_XVelocity, d6
         
     MOVE_LEFT:
-        mulu    d6, d2
-        asr.l   #8, d2
+        mulu    d6, d2                  ; displacement = velocity * time
+        asr.l   #8, d2                  ; arithmetic shift to account for multiplication of fixed point values
 
         JSR     CAN_MOVE_LEFT
         cmpi.b  #0, CanMove
-        beq     SNAP_TO_LEFT
-        sub.l   d2, d4
+        beq     SNAP_TO_LEFT            ; if character cant move left, snap to current grid
+        sub.l   d2, d4                  ; newX = OldX - displacement
         bra     UPDATE
     SNAP_TO_LEFT:
-        lsr.l   #5, d4
-        lsl.l   #5, d4
+        lsr.l   #5, d4                  ; get current column
+        lsl.l   #5, d4                  ; snap to extreme left of column
         bra     UPDATE
     MOVE_RIGHT:
         mulu    d6, d2
@@ -127,7 +129,7 @@ GAME_LOOP:
         move.l  d5, Char_CurY
         move.l  d4, Char_CurX
         
-        cmpi.w  #MAX_BOXES, NumBoxes
+        cmpi.w  #MAX_BOXES, NumBoxes        ; game is over once the limit for boxes is reached
         bge     GAME_OVER
     UPDATE_BOXES:
         lea     AllBoxes, a1
@@ -136,11 +138,11 @@ GAME_LOOP:
         bge     CHARACTER_UPDATE
         JSR     UPDATE_BOX_PHYSICS
         
-        move.l  8(a1), d6
-        cmp.l   (a1), d6
+        move.l  BOX_OLD_X(a1), d6
+        cmp.l   BOX_CUR_X(a1), d6
         bne     BOX_GRAPHICS_UPDATE
-        move.l  12(a1), d6
-        cmp.l   4(a1), d6
+        move.l  BOX_OLD_Y(a1), d6
+        cmp.l   BOX_CUR_Y(a1), d6
         beq     NEXT_BOX
     BOX_GRAPHICS_UPDATE:
         JSR     UPDATE_BOX_GRAPHICS
@@ -148,12 +150,12 @@ GAME_LOOP:
     CHECK_DEATH:
         move.l  Char_CurX, d4
         move.l  Char_CurY, d5
-        sub.l   (a1), d4
+        sub.l   BOX_CUR_X(a1), d4
         cmpi.l  #-GRID_WIDTH, d4
         ble     NEXT_BOX
         cmpi.l  #GRID_WIDTH, d4
         bge     NEXT_BOX
-        sub.l   4(a1), d5
+        sub.l   BOX_CUR_Y(a1), d5
         cmpi.l  #0, d5
         blt     NEXT_BOX
         cmpi.l  #GRID_HEIGHT, d5
@@ -1456,6 +1458,7 @@ SIZE_OF_DRAW_CLIP_RECT_PARAMS   EQU     16
         
 
         
+
 
 
 

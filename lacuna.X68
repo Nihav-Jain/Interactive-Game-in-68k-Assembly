@@ -15,7 +15,7 @@ START   ORG     $1000
         * resize output window 
         move.w  #STAGE_WIDTH, d1
         swap    d1
-        move.w  #STAGE_HEIGHT, d1
+        move.w  #530, d1
         move.b  #CMD_OUTPUT_RES, d0
         TRAP    #15
         
@@ -47,7 +47,7 @@ START   ORG     $1000
         TRAP    #15
         
         JSR     PROCESS_BOX_BITMAP
-        JSR     PROCESS_FUEL_BITMAP
+*        JSR     PROCESS_FUEL_BITMAP
         JSR     PROCESS_CHARACTER_BITMAP
         move.l  #Char_StartX, d4
         move.l  #Char_StartY, d5
@@ -139,20 +139,6 @@ GAME_LOOP:
         
     UPDATE:
         move.l  CurTimeDiff, d2
-        
-*        lea     Stars, a1
-*    REDRAW_COLLECTIBLES:
-*        cmp.w   #0, (a1)
-*        beq     NEXT_COLLECTIBLE
-*        move.l  2(a1), -(sp)
-*        move.l  6(a1), -(sp)
-*        move.l  Fuel_ImageData, -(sp)
-*        JSR     DRAW_CHARACTER
-*        add.l   #12, sp        
-*    NEXT_COLLECTIBLE:        
-*        add.l   #STAR_OBJ_SIZE, a1
-*        cmp.l   #StarsDone, a1
-*        blt     REDRAW_COLLECTIBLES
         
     UPDATE_BOXES:
         lea     AllBoxes, a1
@@ -617,26 +603,26 @@ PROCESS_BOX_BITMAP:
 *-------------------
 * Subroutine: Processes the header of the radioactive symbol image bitmap and saves the required data in memory
 *-------------------
-PROCESS_FUEL_BITMAP:
-
-        move.l  FuelImageDataOffset, d5
-        JSR     SR_SWAP_LONG
-        lea     FuelBitmapData, a0
-        adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
-        move.l  a0, Fuel_ImageData
-        
-        move.l  FuelImageHeight, d5
-        JSR     SR_SWAP_LONG
-        move.l  d5, Fuel_Height
-        
-        move.l  FuelImageWidth, d5
-        JSR     SR_SWAP_LONG        
-        mulu    #BitsPerPixel, d5
-        addi.l  #31, d5
-        lsr.l   #5, d5                  ; d5 = d5 / 32
-        lsl.l   #2, d5                  ; d5 = d5 * 4
-        move.l  d5, Fuel_Width
-        RTS        
+*PROCESS_FUEL_BITMAP:
+*
+*        move.l  FuelImageDataOffset, d5
+*        JSR     SR_SWAP_LONG
+*        lea     FuelBitmapData, a0
+*        adda.l  d5, a0                  ; adding image data offset to bitmap data start address, a0 now points to the image data
+*        move.l  a0, Fuel_ImageData
+*        
+*        move.l  FuelImageHeight, d5
+*        JSR     SR_SWAP_LONG
+*        move.l  d5, Fuel_Height
+*        
+*        move.l  FuelImageWidth, d5
+*        JSR     SR_SWAP_LONG        
+*        mulu    #BitsPerPixel, d5
+*        addi.l  #31, d5
+*        lsr.l   #5, d5                  ; d5 = d5 / 32
+*        lsl.l   #2, d5                  ; d5 = d5 * 4
+*        move.l  d5, Fuel_Width
+*        RTS        
         
 *-------------------
 * Subroutine: Copies the double buffer to the main screen
@@ -726,6 +712,10 @@ ADD_BOX:
         move.b  #0, (a0)+       ; isPickedUp
         move.l  a0, LastBox
         addi.w  #1, NumBoxes
+        move.w  #0, -(sp)               ; padding to make even
+        move.w  NumBoxes, -(sp)
+        JSR     DRAW_SCORE
+        add.l   #4, sp
         movem.l (sp)+, d0-d1/a0
     NO_MORE_BOXES:
         RTS
@@ -789,7 +779,195 @@ SR_SWAP_LONG:
         JSR     SR_SWAP_WORD
         RTS
 
+*********************************************************************
+*                   UTILITY SUBROUTINES                             *
+*********************************************************************
+
+* score
+DRAW_SCORE:
+        movem.l d0-d4/d6-d7, -(sp)
         
+        move.l  #$00000000, d1
+        move.b  #CMD_FILL_COLOR, d0
+        TRAP    #15
+        
+        move.w  #SCOREBOARD_LX, d1
+        move.w  #SCOREBOARD_UY, d2
+        move.w  #SCOREBOARD_RX, d3
+        move.w  #SCOREBOARD_LY, d4
+        move.b  #CMD_DRAW_RECT, d0
+        TRAP    #15
+                
+        move.l  #$00FFFFFF, d1
+        move.b  #CMD_PEN_COLOR, d0
+        TRAP    #15
+        
+        clr.l   d7
+        clr.l   d6
+        move.w  32(sp), d7
+
+        move.w  d7, d6
+        divu    #100, d6
+        move.w  #0, -(sp)               ; padding to make even
+        move.w  d6, -(sp)
+        move.w  #HUNDREDS_DIGIT_X, -(sp)
+        move.w  #HUNDREDS_DIGIT_Y, -(sp)
+        JSR     DRAW_DIGIT
+        add.l   #8, sp
+        
+        clr.w   d6
+        swap    d6
+        divu    #10, d6
+        move.w  #0, -(sp)               ; padding to make even
+        move.w  d6, -(sp)
+        move.w  #TENS_DIGIT_X, -(sp)
+        move.w  #TENS_DIGIT_Y, -(sp)
+        JSR     DRAW_DIGIT
+        add.l   #8, sp
+        
+        clr.w   d6
+        swap    d6
+        move.w  #0, -(sp)               ; padding to make even
+        move.w  d6, -(sp)
+        move.w  #UNITS_DIGIT_X, -(sp)
+        move.w  #UNITS_DIGIT_Y, -(sp)
+        JSR     DRAW_DIGIT
+        add.l   #8, sp
+        
+        movem.l (sp)+, d0-d4/d6-d7 
+        RTS
+
+* digit, x, y
+DRAW_DIGIT:
+        movem.l d0-d7/a3-a5, -(sp)
+        lea     DigitToSegments, a3
+        lea     PowersOf2, a4
+        move.w  52(sp), d5            ; digit to draw
+        move.b  (a3,d5), d6         ; which segments to draw
+        clr.b   d7
+        clr.l   d2
+    CHECK_SEGMENT:        
+        move.b  d6, d4              ; copy of which segments to draw
+        move.b  (a4, d7), d3        ; get 2^d7 for and-ing
+        and.b   d3, d4              ; check if given segment is to be drawn
+        beq     DONT_DRAW
+        lea     DrawLEDSegments, a5
+        move.b  d7, d2
+        lsl.b   #2, d2
+        add.l   d2, a5
+        move.w  50(sp), d0
+        move.w  48(sp), d1
+        move.w  d0, -(sp)
+        move.w  d1, -(sp)
+        move.l  (a5), d1
+        move.l  d1, a5
+        JSR     (a5)
+        add.l   #4, sp
+    DONT_DRAW:
+        addi.b  #1, d7
+        cmpi.b  #7, d7
+        blt     CHECK_SEGMENT
+        
+        movem.l (sp)+, d0-d7/a3-a5
+        RTS
+
+* (x, y) -> (x+L, y)
+DRAW_SEGMENT_A:
+        movem.l d0-d4, -(sp)
+        move.w  26(sp), d1
+        move.w  24(sp), d2
+        move.w  d1, d3
+        addi.w  #SEGMENT_LENGTH, d3
+        move.w  d2, d4
+        move.b  #CMD_DRAW_LINE, d0
+        TRAP    #15
+        movem.l (sp)+, d0-d4
+        RTS
+
+* (x+L, y) -> (x+L, y+L)
+DRAW_SEGMENT_B:
+        movem.l d0-d4, -(sp)
+        move.w  26(sp), d1
+        move.w  24(sp), d2
+        addi.w  #SEGMENT_LENGTH, d1
+        move.w  d1, d3
+        move.w  d2, d4
+        addi.w  #SEGMENT_LENGTH, d4
+        move.b  #CMD_DRAW_LINE, d0
+        TRAP    #15
+        movem.l (sp)+, d0-d4
+        RTS
+        
+* (x+L, y+L) -> (x+L, y+2L)
+DRAW_SEGMENT_C:
+        movem.l d0-d4, -(sp)
+        move.w  26(sp), d1
+        move.w  24(sp), d2
+        addi.w  #SEGMENT_LENGTH, d1
+        addi.w  #SEGMENT_LENGTH, d2
+        move.w  d1, d3        
+        move.w  d2, d4
+        addi.w  #SEGMENT_LENGTH, d4
+        move.b  #CMD_DRAW_LINE, d0
+        TRAP    #15
+        movem.l (sp)+, d0-d4
+        RTS
+
+* (x, y+2L) -> (x+L, y+2L)
+DRAW_SEGMENT_D:
+        movem.l d0-d4, -(sp)
+        move.w  26(sp), d1
+        move.w  24(sp), d2
+        addi.w  #(2*SEGMENT_LENGTH), d2
+        move.w  d1, d3
+        addi.w  #SEGMENT_LENGTH, d3
+        move.w  d2, d4
+        move.b  #CMD_DRAW_LINE, d0
+        TRAP    #15
+        movem.l (sp)+, d0-d4
+        RTS
+        
+* (x, y+L) -> (x, y+2L)
+DRAW_SEGMENT_E:
+        movem.l d0-d4, -(sp)
+        move.w  26(sp), d1
+        move.w  24(sp), d2
+        move.w  d1, d3
+        addi.w  #SEGMENT_LENGTH, d2
+        move.w  d2, d4
+        addi.w  #SEGMENT_LENGTH, d4
+        move.b  #CMD_DRAW_LINE, d0
+        TRAP    #15
+        movem.l (sp)+, d0-d4
+        RTS
+        
+* (x, y) -> (x, y+L)        
+DRAW_SEGMENT_F:
+        movem.l d0-d4, -(sp)
+        move.w  26(sp), d1
+        move.w  24(sp), d2
+        move.w  d1, d3
+        move.w  d2, d4
+        addi.w  #SEGMENT_LENGTH, d4
+        move.b  #CMD_DRAW_LINE, d0
+        TRAP    #15
+        movem.l (sp)+, d0-d4
+        RTS
+        
+* (x, y+L) -> (x+L, y+L)
+DRAW_SEGMENT_G:
+        movem.l d0-d4, -(sp)
+        move.w  26(sp), d1
+        move.w  24(sp), d2
+        addi.w  #SEGMENT_LENGTH, d2
+        move.w  d1, d3
+        addi.w  #SEGMENT_LENGTH, d3
+        move.w  d2, d4
+        move.b  #CMD_DRAW_LINE, d0
+        TRAP    #15
+        movem.l (sp)+, d0-d4
+        RTS
+
 *----------------------------------------------------------*
 *----------------------------------------------------------*
 
@@ -807,7 +985,10 @@ LoadingText         dc.b    'Loading...', 0
 * Trap codes
 *-------------------
 CMD_PEN_COLOR       EQU     80
+CMD_FILL_COLOR      EQU     81
 CMD_DRAW_PIXEL      EQU     82
+CMD_DRAW_LINE       EQU     84
+CMD_DRAW_RECT       EQU     87
 CMD_OUTPUT_RES      EQU     33
 CMD_CLEAR_SCREEN    EQU     11
 CMD_DRAW_STRING     EQU     95
@@ -919,48 +1100,51 @@ Char_CurX               dc.l    Char_StartX
 Char_CurY               dc.l    Char_StartY
 Char_OldX               dc.l    Char_StartX
 Char_OldY               dc.l    Char_StartY
-*BLOCKS_TO_REDRAW        ds.l    10
+
 
 *-------------------
-* Fuel / Collectable
+* 7 segment LED
 *-------------------
-LifeSaver05          ds.l    0
-FuelBitmapData       INCBIN  "images/radioactive.bmp"
+SCOREBOARD_LX           EQU     0
+SCOREBOARD_UY           EQU     490
+SCOREBOARD_RX           EQU     60
+SCOREBOARD_LY           EQU     530
+ 
+SEGMENT_LENGTH          EQU     10
 
-FuelImageDataOffset  EQU     (FuelBitmapData+10)      ; LONG
-FuelImageWidth       EQU     (FuelImageDataOffset+8)  ; LONG
-FuelImageHeight      EQU     (FuelImageWidth+4)       ; LONG
+HUNDREDS_DIGIT_X        EQU     10
+HUNDREDS_DIGIT_Y        EQU     500
 
-Fuel_ImageData       ds.l    1
-Fuel_Height          ds.l    1
-Fuel_Width           ds.l    1   ; corresponds to number of bytes per row
+TENS_DIGIT_X            EQU     25
+TENS_DIGIT_Y            EQU     500
 
-Stars                   dc.w    1           ; alive     (word size to keep an even boundary)
-                        dc.l    64, 416     ; x, y
-                        dc.b    2,13        ; x cell, y cell
+UNITS_DIGIT_X           EQU     40
+UNITS_DIGIT_Y           EQU     500
 
-                        dc.w    1           ; alive
-                        dc.l    192, 416    ; x, y
-                        dc.b    6,13        ; x cell, y cell
-
-                        dc.w    1           ; alive
-                        dc.l    320, 416    ; x, y
-                        dc.b    10,13       ; x cell, y cell
-
-                        dc.w    1           ; alive
-                        dc.l    448, 416    ; x, y
-                        dc.b    14,13       ; x cell, y cell
-                        
-                        dc.w    1           ; alive
-                        dc.l    576, 416    ; x, y
-                        dc.b    18,13       ; x cell, y cell
-StarsDone               dc.b    0
-STAR_OBJ_SIZE           EQU     12
+DigitToSegments         dc.b    %01111110   ; 0
+                        dc.b    %00110000   ; 1
+                        dc.b    %01101101   ; 2
+                        dc.b    %01111001   ; 3
+                        dc.b    %00110011   ; 4
+                        dc.b    %01011011   ; 5
+                        dc.b    %01011111   ; 6
+                        dc.b    %01110000   ; 7
+                        dc.b    %01111111   ; 8
+                        dc.b    %01111011   ; 9
+PowersOf2               dc.b    1, 2, 4, 8, 16, 32, 64
+DrawLEDSegments         dc.l    DRAW_SEGMENT_G
+                        dc.l    DRAW_SEGMENT_F
+                        dc.l    DRAW_SEGMENT_E
+                        dc.l    DRAW_SEGMENT_D
+                        dc.l    DRAW_SEGMENT_C
+                        dc.l    DRAW_SEGMENT_B
+                        dc.l    DRAW_SEGMENT_A
 
         END     START
         
 
         
+
 
 
 

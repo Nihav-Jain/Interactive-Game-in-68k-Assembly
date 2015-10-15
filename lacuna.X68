@@ -6,17 +6,24 @@
 * Description   : Avoid the falling blocks
 *-----------------------------------------------------------
 
+*-------------------
+* Registers
+*-------------------
 ALL_REGS            REG     D0-D7/A0-A6
 ALL_BMP_DRAW_REGS   REG     D0-D7/A0
+
+REG_DRAW_SCORE      REG     d0-d4/d6-d7
+REG_DRAW_DIGIT      REG     d0-d7/a3-a5
+REG_DRAW_SEGMENT    REG     d0-d4
 *-------------------
 * MAIN
 *-------------------
 START   ORG     $1000
 
         * resize output window 
-        move.w  #STAGE_WIDTH, d1
+        move.w  #SCREEN_WIDTH, d1
         swap    d1
-        move.w  #530, d1
+        move.w  #SCREEN_HEIGHT, d1
         move.b  #CMD_OUTPUT_RES, d0
         TRAP    #15
         
@@ -504,7 +511,7 @@ SR_DRAW_CLIP_RECTANGLE:
         lsl.w   #8, d1                  ; #$00BBGG00
         move.b  2(a0, d6.l), d1         ; #$00BBGGRR
         
-        move.l  #CMD_PEN_COLOR, d0
+        move.l  #CMD_SET_PEN_COLOR, d0
         TRAP    #15
         
         move.l  d3, d1
@@ -574,7 +581,7 @@ DRAW_CHARACTER:
         
         cmp.l   #$00FFFFFF, d1
         beq     INCREMENT_INDEX
-        move.l  #CMD_PEN_COLOR, d0
+        move.l  #CMD_SET_PEN_COLOR, d0
         TRAP    #15
         
         move.l  d3, d1
@@ -846,126 +853,144 @@ SR_SWAP_LONG:
 *                   SCOREBOARD SUBROUTINES                          *
 *********************************************************************
 
-* score
+*------------------------
+* Draws the current score (number of boxes in the game till now) as a 7 segment LED
+* Parameters: (WORD) score
+*------------------------
 DRAW_SCORE:
-        movem.l d0-d4/d6-d7, -(sp)
+        movem.l REG_DRAW_SCORE, -(sp)
         
-        move.l  #$00000000, d1
-        move.b  #CMD_FILL_COLOR, d0
+        move.l  #$00000000, d1              ; fill color for scorecard background
+        move.b  #CMD_SET_FILL_COLOR, d0
         TRAP    #15
         
         move.w  #SCOREBOARD_LX, d1
         move.w  #SCOREBOARD_UY, d2
         move.w  #SCOREBOARD_RX, d3
         move.w  #SCOREBOARD_LY, d4
-        move.b  #CMD_DRAW_RECT, d0
+        move.b  #CMD_DRAW_RECT, d0          ; draw scorecard background
         TRAP    #15
                 
-        move.l  #$00FFFFFF, d1
-        move.b  #CMD_PEN_COLOR, d0
+        move.l  #$00FFFFFF, d1              ; pen color for LED segments
+        move.b  #CMD_SET_PEN_COLOR, d0
         TRAP    #15
         
         clr.l   d7
         clr.l   d6
-        move.w  32(sp), d7
+        move.w  PARAM_SCORE_TO_DRAW(sp), d7
 
         move.w  d7, d6
-        divu    #100, d6
-        move.w  #0, -(sp)               ; padding to make even
+        divu    #100, d6                    ; get Hundreds digit
+        move.w  #0, -(sp)                   ; padding to have even boundary in stack
         move.w  d6, -(sp)
         move.w  #HUNDREDS_DIGIT_X, -(sp)
         move.w  #HUNDREDS_DIGIT_Y, -(sp)
         JSR     DRAW_DIGIT
-        add.l   #8, sp
+        add.l   #SIZE_OF_DRAW_DIGIT_PARAMS, sp
         
         clr.w   d6
-        swap    d6
-        divu    #10, d6
-        move.w  #0, -(sp)               ; padding to make even
+        swap    d6                          ; remainder from last division is now used to get remaining digits
+        divu    #10, d6                     ; get Tens digit
+        move.w  #0, -(sp)
         move.w  d6, -(sp)
         move.w  #TENS_DIGIT_X, -(sp)
         move.w  #TENS_DIGIT_Y, -(sp)
         JSR     DRAW_DIGIT
-        add.l   #8, sp
+        add.l   #SIZE_OF_DRAW_DIGIT_PARAMS, sp
         
         clr.w   d6
-        swap    d6
-        move.w  #0, -(sp)               ; padding to make even
+        swap    d6                          ; remainder from last division is the units digit
+        move.w  #0, -(sp)
         move.w  d6, -(sp)
         move.w  #UNITS_DIGIT_X, -(sp)
         move.w  #UNITS_DIGIT_Y, -(sp)
         JSR     DRAW_DIGIT
-        add.l   #8, sp
+        add.l   #SIZE_OF_DRAW_DIGIT_PARAMS, sp
         
-        movem.l (sp)+, d0-d4/d6-d7 
+        movem.l (sp)+, REG_DRAW_SCORE
         RTS
 
-* digit, x, y
+*------------------------
+* Draws the given digit as a 7 segment LED at the given (x, y) offset on the screen
+* Parameters: (WORD) digit, (WORD) X, (WORD) Y
+*------------------------
 DRAW_DIGIT:
-        movem.l d0-d7/a3-a5, -(sp)
-        lea     DigitToSegments, a3
-        lea     PowersOf2, a4
-        move.w  52(sp), d5            ; digit to draw
-        move.b  (a3,d5), d6         ; which segments to draw
+        movem.l REG_DRAW_DIGIT, -(sp)
+        lea     DigitToSegments, a3                         ; contains info about which segments are to be drawn for each digit
+        lea     PowersOf2, a4                               ; list of powers of 2 for and-ing (determining which segmenmt to draw)
+        move.w  PARAM_DIGIT_TO_DRAW(sp), d5                 ; digit to draw
+        move.b  (a3,d5), d6                                 ; which segments to draw
         clr.b   d7
         clr.l   d2
     CHECK_SEGMENT:        
-        move.b  d6, d4              ; copy of which segments to draw
-        move.b  (a4, d7), d3        ; get 2^d7 for and-ing
-        and.b   d3, d4              ; check if given segment is to be drawn
+        move.b  d6, d4                                      ; copy of which segments to draw
+        move.b  (a4, d7), d3                                ; get 2^d7 for and-ing
+        and.b   d3, d4                                      ; check if current segment is to be drawn
         beq     DONT_DRAW
-        lea     DrawLEDSegments, a5
+        lea     DrawLEDSegments, a5                         ; list of funtion pointers of segment drawing functions
         move.b  d7, d2
-        lsl.b   #2, d2
+        lsl.b   #2, d2                                      ; addresses are LONG in size
         add.l   d2, a5
-        move.w  50(sp), d0
-        move.w  48(sp), d1
+        move.w  PARAM_DIGIT_X_OFFSET(sp), d0
+        move.w  PARAM_DIGIT_Y_OFFSET(sp), d1
         move.w  d0, -(sp)
         move.w  d1, -(sp)
         move.l  (a5), d1
         move.l  d1, a5
-        JSR     (a5)
-        add.l   #4, sp
+        JSR     (a5)                                        ; call the function to draw segment represented by d7th bit
+        add.l   #SIZE_OF_DRAW_SEGMENT_PARAMS, sp
     DONT_DRAW:
         addi.b  #1, d7
-        cmpi.b  #7, d7
+        cmpi.b  #NUM_SEGMENTS, d7                           ; check if all segment bits have been checked (7 in number)
         blt     CHECK_SEGMENT
         
-        movem.l (sp)+, d0-d7/a3-a5
+        movem.l (sp)+, REG_DRAW_DIGIT
         RTS
 
+*------------------------
+* Draws segment A of a 7 segment LED set, relative to the given (x, y) offset on the screen
 * (x, y) -> (x+L, y)
+* Parameters: (WORD) X, (WORD) Y
+*------------------------
 DRAW_SEGMENT_A:
-        movem.l d0-d4, -(sp)
-        move.w  26(sp), d1
-        move.w  24(sp), d2
+        movem.l REG_DRAW_SEGMENT, -(sp)
+        move.w  PARAM_SEGMENT_X_OFFSET(sp), d1
+        move.w  PARAM_SEGMENT_Y_OFFSET(sp), d2
         move.w  d1, d3
         addi.w  #SEGMENT_LENGTH, d3
         move.w  d2, d4
         move.b  #CMD_DRAW_LINE, d0
         TRAP    #15
-        movem.l (sp)+, d0-d4
+        movem.l (sp)+, REG_DRAW_SEGMENT
         RTS
 
+*------------------------
+* Draws segment A of a 7 segment LED set, relative to the given (x, y) offset on the screen
 * (x+L, y) -> (x+L, y+L)
+* Parameters: (WORD) X, (WORD) Y
+*------------------------
 DRAW_SEGMENT_B:
-        movem.l d0-d4, -(sp)
-        move.w  26(sp), d1
-        move.w  24(sp), d2
+        movem.l REG_DRAW_SEGMENT, -(sp)
+        move.w  PARAM_SEGMENT_X_OFFSET(sp), d1
+        move.w  PARAM_SEGMENT_Y_OFFSET(sp), d2
         addi.w  #SEGMENT_LENGTH, d1
         move.w  d1, d3
         move.w  d2, d4
         addi.w  #SEGMENT_LENGTH, d4
         move.b  #CMD_DRAW_LINE, d0
         TRAP    #15
-        movem.l (sp)+, d0-d4
+        movem.l (sp)+, REG_DRAW_SEGMENT
         RTS
         
+*------------------------
+* Draws segment A of a 7 segment LED set, relative to the given (x, y) offset on the screen
 * (x+L, y+L) -> (x+L, y+2L)
+* Parameters: (WORD) X, (WORD) Y
+*------------------------
 DRAW_SEGMENT_C:
-        movem.l d0-d4, -(sp)
-        move.w  26(sp), d1
-        move.w  24(sp), d2
+        movem.l REG_DRAW_SEGMENT, -(sp)
+        move.w  PARAM_SEGMENT_X_OFFSET(sp), d1
+        move.w  PARAM_SEGMENT_Y_OFFSET(sp), d2
         addi.w  #SEGMENT_LENGTH, d1
         addi.w  #SEGMENT_LENGTH, d2
         move.w  d1, d3        
@@ -973,64 +998,81 @@ DRAW_SEGMENT_C:
         addi.w  #SEGMENT_LENGTH, d4
         move.b  #CMD_DRAW_LINE, d0
         TRAP    #15
-        movem.l (sp)+, d0-d4
+        movem.l (sp)+, REG_DRAW_SEGMENT
         RTS
 
+*------------------------
+* Draws segment A of a 7 segment LED set, relative to the given (x, y) offset on the screen
 * (x, y+2L) -> (x+L, y+2L)
+* Parameters: (WORD) X, (WORD) Y
+*------------------------
 DRAW_SEGMENT_D:
-        movem.l d0-d4, -(sp)
-        move.w  26(sp), d1
-        move.w  24(sp), d2
+        movem.l REG_DRAW_SEGMENT, -(sp)
+        move.w  PARAM_SEGMENT_X_OFFSET(sp), d1
+        move.w  PARAM_SEGMENT_Y_OFFSET(sp), d2
         addi.w  #(2*SEGMENT_LENGTH), d2
         move.w  d1, d3
         addi.w  #SEGMENT_LENGTH, d3
         move.w  d2, d4
         move.b  #CMD_DRAW_LINE, d0
         TRAP    #15
-        movem.l (sp)+, d0-d4
+        movem.l (sp)+, REG_DRAW_SEGMENT
         RTS
         
+*------------------------
+* Draws segment A of a 7 segment LED set, relative to the given (x, y) offset on the screen
 * (x, y+L) -> (x, y+2L)
+* Parameters: (WORD) X, (WORD) Y
+*------------------------
 DRAW_SEGMENT_E:
-        movem.l d0-d4, -(sp)
-        move.w  26(sp), d1
-        move.w  24(sp), d2
+        movem.l REG_DRAW_SEGMENT, -(sp)
+        move.w  PARAM_SEGMENT_X_OFFSET(sp), d1
+        move.w  PARAM_SEGMENT_Y_OFFSET(sp), d2
         move.w  d1, d3
         addi.w  #SEGMENT_LENGTH, d2
         move.w  d2, d4
         addi.w  #SEGMENT_LENGTH, d4
         move.b  #CMD_DRAW_LINE, d0
         TRAP    #15
-        movem.l (sp)+, d0-d4
+        movem.l (sp)+, REG_DRAW_SEGMENT
         RTS
         
+*------------------------
+* Draws segment A of a 7 segment LED set, relative to the given (x, y) offset on the screen
 * (x, y) -> (x, y+L)        
+* Parameters: (WORD) X, (WORD) Y
+*------------------------
 DRAW_SEGMENT_F:
-        movem.l d0-d4, -(sp)
-        move.w  26(sp), d1
-        move.w  24(sp), d2
+        movem.l REG_DRAW_SEGMENT, -(sp)
+        move.w  PARAM_SEGMENT_X_OFFSET(sp), d1
+        move.w  PARAM_SEGMENT_Y_OFFSET(sp), d2
         move.w  d1, d3
         move.w  d2, d4
         addi.w  #SEGMENT_LENGTH, d4
         move.b  #CMD_DRAW_LINE, d0
         TRAP    #15
-        movem.l (sp)+, d0-d4
+        movem.l (sp)+, REG_DRAW_SEGMENT
         RTS
         
+*------------------------
+* Draws segment A of a 7 segment LED set, relative to the given (x, y) offset on the screen
 * (x, y+L) -> (x+L, y+L)
+* Parameters: (WORD) X, (WORD) Y
+*------------------------
 DRAW_SEGMENT_G:
-        movem.l d0-d4, -(sp)
-        move.w  26(sp), d1
-        move.w  24(sp), d2
+        movem.l REG_DRAW_SEGMENT, -(sp)
+        move.w  PARAM_SEGMENT_X_OFFSET(sp), d1
+        move.w  PARAM_SEGMENT_Y_OFFSET(sp), d2
         addi.w  #SEGMENT_LENGTH, d2
         move.w  d1, d3
         addi.w  #SEGMENT_LENGTH, d3
         move.w  d2, d4
         move.b  #CMD_DRAW_LINE, d0
         TRAP    #15
-        movem.l (sp)+, d0-d4
+        movem.l (sp)+, REG_DRAW_SEGMENT
         RTS
-
+        
+*SCOREBOARD  INCLUDE "scoreboard.x68"
 *----------------------------------------------------------*
 *----------------------------------------------------------*
 
@@ -1038,6 +1080,8 @@ DRAW_SEGMENT_G:
 *-------------------
 * STAGE related constants
 *-------------------
+SCREEN_WIDTH        EQU     640
+SCREEN_HEIGHT       EQU     540
 STAGE_WIDTH         EQU     640
 STAGE_HEIGHT        EQU     480
 GRID_WIDTH          EQU     32
@@ -1051,8 +1095,8 @@ GameDescription     dc.b    'Avoid the falling blocks',0
 *-------------------
 * Trap codes
 *-------------------
-CMD_PEN_COLOR       EQU     80
-CMD_FILL_COLOR      EQU     81
+CMD_SET_PEN_COLOR       EQU     80
+CMD_SET_FILL_COLOR      EQU     81
 CMD_DRAW_PIXEL      EQU     82
 CMD_DRAW_LINE       EQU     84
 CMD_DRAW_RECT       EQU     87
@@ -1178,6 +1222,7 @@ SCOREBOARD_RX           EQU     60
 SCOREBOARD_LY           EQU     530
  
 SEGMENT_LENGTH          EQU     10
+NUM_SEGMENTS            EQU     7
         
 HUNDREDS_DIGIT_X        EQU     10
 HUNDREDS_DIGIT_Y        EQU     500
@@ -1206,6 +1251,22 @@ DrawLEDSegments         dc.l    DRAW_SEGMENT_G
                         dc.l    DRAW_SEGMENT_C
                         dc.l    DRAW_SEGMENT_B
                         dc.l    DRAW_SEGMENT_A
+                        
+*-------------------
+* Parameter Offsets
+*-------------------
+PARAM_SCORE_TO_DRAW     EQU     32
+PARAM_DIGIT_TO_DRAW     EQU     52
+PARAM_DIGIT_X_OFFSET    EQU     50
+PARAM_DIGIT_Y_OFFSET    EQU     48
+PARAM_SEGMENT_X_OFFSET  EQU     26
+PARAM_SEGMENT_Y_OFFSET  EQU     24
+
+*-------------------
+* Size of Paramerters of a Subroutine
+*-------------------
+SIZE_OF_DRAW_DIGIT_PARAMS       EQU     8
+SIZE_OF_DRAW_SEGMENT_PARAMS     EQU     4
 
         END     START
         

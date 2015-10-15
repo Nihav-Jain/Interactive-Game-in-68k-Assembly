@@ -834,20 +834,29 @@ INITIALIZE:
         JSR     DRAW_CLIP_RECTANGLE
         add.l   #SIZE_OF_DRAW_CLIP_RECT_PARAMS, sp
         
+        * initialize character position
         move.l  #Char_StartX, d4
         move.l  #Char_StartY, d5
         
+        * draw character
         move.l  d4, -(sp)
         move.l  d5, -(sp)
         move.l  Char_ImageData, -(sp)
         JSR     DRAW_PHYSICS_BODY
         add.l   #SIZE_OF_DRAW_BODY_PARAMS, sp
 
+        * display game description
         lea     GameDescription, a1
         move.w  #200, d1
         move.w  #500, d2
         move.b  #CMD_DRAW_STRING, d0
         TRAP    #15
+
+        * display score
+        move.w  #0, -(sp)               ; padding to make even
+        move.w  #0, -(sp)
+        JSR     DRAW_SCORE
+        add.l   #SIZE_OF_DRAW_SCORE_PARAMS, sp
         
         * repaint buffer on main screen
         JSR     REPAINT
@@ -868,7 +877,7 @@ GAME_OVER:
         move.w  #0, -(sp)               ; padding to make even
         move.w  NumBoxes, -(sp)
         JSR     DRAW_SCORE
-        add.l   #4, sp
+        add.l   #SIZE_OF_DRAW_SCORE_PARAMS, sp
         
         JSR     REPAINT
         RTS
@@ -1394,9 +1403,14 @@ PARAM_GRAV_PTR_Y        EQU     28
 SIZE_OF_DRAW_SCORE_PARAMS       EQU     4
 SIZE_OF_DRAW_DIGIT_PARAMS       EQU     8
 SIZE_OF_DRAW_SEGMENT_PARAMS     EQU     4
+
 SIZE_OF_GET_TOP_BOX_PARAMS      EQU     8
 SIZE_OF_GET_MAP_STATUS_PARAMS   EQU     8
+SIZE_OF_UPDATE_MAP_PARAMS       EQU     4
+
 SIZE_OF_IS_FALLING_PARAMS       EQU     12
+SIZE_OF_APPLY_GRAV_PARAMS       EQU     16
+
 SIZE_OF_DRAW_BODY_PARAMS        EQU     12
 SIZE_OF_DRAW_CLIP_RECT_PARAMS   EQU     16
 

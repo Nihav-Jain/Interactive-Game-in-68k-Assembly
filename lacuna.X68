@@ -206,6 +206,24 @@ CAN_MOVE_LEFT:
         add.l   d3, a5                  ; add cell offset to GameMap pointer
         cmpi.l  #0, (a5)                ; check if cell is empty
         bne     CANT_MOVE_LEFT
+        
+*        move.l  d5, d3
+*        divu    #GRID_HEIGHT, d3
+*        move.l  d3, d5
+*        andi.l  #$FFFF0000, d3
+*        beq     UPDATE_MOVE_LEFT_FLAG
+*        addi.l  #1, d5
+*        lsl.l   #5, d5
+*        * get status of grid with updated coordinates
+*        lea     GameMap, a5
+*        move.l  d4, -(sp)
+*        move.l  d5, -(sp)
+*        JSR     GET_MAP_STATUS
+*        add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
+*        add.l   d3, a5                  ; add cell offset to GameMap pointer
+*        cmpi.l  #0, (a5)                ; check if cell is empty
+*        bne     CANT_MOVE_LEFT
+    UPDATE_MOVE_LEFT_FLAG:    
         move.b  #1, CanMove
     CANT_MOVE_LEFT:
         movem.l (sp)+, REG_CAN_MOVE

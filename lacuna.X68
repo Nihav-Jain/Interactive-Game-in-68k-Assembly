@@ -53,12 +53,7 @@ GAME_LOOP:
         
         JSR     GET_TIME_DIFF
         move.l  d2, CurTimeDiff
-    ADD_NEW_BOX:
-        add.l   d2, BoxGenerationTimer
-        cmpi.l  #200, BoxGenerationTimer          ; add a new box every 2 seconds
-        blt     GET_INPUT
-        JSR     ADD_BOX
-        move.l  #0, BoxGenerationTimer
+        JSR     TIME_FOR_NEW_BOX
     GET_INPUT:
         clr.l   d6
         move.l  #KEY_COMBO, d1
@@ -103,40 +98,11 @@ GAME_LOOP:
         
         cmpi.w  #MAX_BOXES, NumBoxes        ; game is over once the limit for boxes is reached
         bge     GAME_OVER
-    UPDATE_BOXES:
-        lea     AllBoxes, a1
-    APPLY_GRAVITY_ON_BOXES:
-        cmpa.l  LastBox, a1
-        bge     CHARACTER_UPDATE
-        JSR     UPDATE_BOX_PHYSICS
         
-        move.l  BOX_OLD_X(a1), d6
-        cmp.l   BOX_CUR_X(a1), d6
-        bne     BOX_GRAPHICS_UPDATE
-        move.l  BOX_OLD_Y(a1), d6
-        cmp.l   BOX_CUR_Y(a1), d6
-        beq     NEXT_BOX
-    BOX_GRAPHICS_UPDATE:
-        JSR     UPDATE_BOX_GRAPHICS
+        JSR     UPDATE_BOXES
+        cmpi.b  #0, Char_Alive
+        beq     EXIT_GAME_LOOP
         
-    CHECK_DEATH:
-        move.l  Char_CurX, d4
-        move.l  Char_CurY, d5
-        sub.l   BOX_CUR_X(a1), d4
-        cmpi.l  #-GRID_WIDTH, d4
-        ble     NEXT_BOX
-        cmpi.l  #GRID_WIDTH, d4
-        bge     NEXT_BOX
-        sub.l   BOX_CUR_Y(a1), d5
-        cmpi.l  #0, d5
-        blt     NEXT_BOX
-        cmpi.l  #GRID_HEIGHT, d5
-        blt     EXIT_GAME_LOOP
-    NEXT_BOX:
-        add.l   #BOX_OBJ_SIZE, a1
-        bra     APPLY_GRAVITY_ON_BOXES
-        
-    CHARACTER_UPDATE:
         JSR     UPDATE_CHARACTER
         JSR     REPAINT
         bra GAME_LOOP
@@ -663,6 +629,14 @@ GET_TOP_BOX_OF_COLUMN:
         movem.l (sp)+, a0
         RTS
         
+TIME_FOR_NEW_BOX:
+        add.l   d2, BoxGenerationTimer
+        cmpi.l  #200, BoxGenerationTimer          ; add a new box every 2 seconds
+        blt     RTS_FROM_NEW_BOX
+        JSR     ADD_BOX
+        move.l  #0, BoxGenerationTimer
+    RTS_FROM_NEW_BOX:
+        RTS
 *-------------------
 * Adds a new box (if possible) to the stage
 *-------------------
@@ -877,6 +851,43 @@ MOVE_RIGHT:
         add.l   d2, d4
     RTS_FROM_MOVE_RIGHT:
         RTS
+        
+UPDATE_BOXES:
+        lea     AllBoxes, a1
+    APPLY_GRAVITY_ON_BOXES:
+        cmpa.l  LastBox, a1
+        bge     RTS_FROM_UPDATE_BOXES
+        JSR     UPDATE_BOX_PHYSICS
+        
+        move.l  BOX_OLD_X(a1), d6
+        cmp.l   BOX_CUR_X(a1), d6
+        bne     BOX_GRAPHICS_UPDATE
+        move.l  BOX_OLD_Y(a1), d6
+        cmp.l   BOX_CUR_Y(a1), d6
+        beq     NEXT_BOX
+    BOX_GRAPHICS_UPDATE:
+        JSR     UPDATE_BOX_GRAPHICS
+        
+    CHECK_DEATH:
+        move.l  Char_CurX, d4
+        move.l  Char_CurY, d5
+        sub.l   BOX_CUR_X(a1), d4
+        cmpi.l  #-GRID_WIDTH, d4
+        ble     NEXT_BOX
+        cmpi.l  #GRID_WIDTH, d4
+        bge     NEXT_BOX
+        sub.l   BOX_CUR_Y(a1), d5
+        cmpi.l  #0, d5
+        blt     NEXT_BOX
+        cmpi.l  #GRID_HEIGHT, d5
+        blt     CHARACTER_DIED
+    NEXT_BOX:
+        add.l   #BOX_OBJ_SIZE, a1
+        bra     APPLY_GRAVITY_ON_BOXES
+    CHARACTER_DIED:
+        move.b  #0, Char_Alive
+    RTS_FROM_UPDATE_BOXES:
+        RTS       
         
 UPDATE_BOX_PHYSICS:
         move.l  (a1), 8(a1)         ; move curX into oldX
@@ -1310,7 +1321,7 @@ Char_CurX           dc.l    Char_StartX
 Char_CurY           dc.l    Char_StartY
 Char_OldX           dc.l    Char_StartX
 Char_OldY           dc.l    Char_StartY
-
+Char_Alive          dc.b    1
 
 *-------------------
 * Box Bitmap file descriptors
@@ -1466,6 +1477,7 @@ SIZE_OF_DRAW_CLIP_RECT_PARAMS   EQU     16
         
 
         
+
 
 
 

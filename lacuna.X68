@@ -10,7 +10,7 @@
 * Registers
 *-------------------
 ALL_REGS            REG     D0-D7/A0-A6
-ALL_BMP_DRAW_REGS   REG     D0-D7/A0
+REG_DRAW_BMP        REG     D0-D7/A0
 
 REG_DRAW_SCORE      REG     d0-d4/d6-d7
 REG_DRAW_DIGIT      REG     d0-d7/a3-a5
@@ -84,7 +84,7 @@ START   ORG     $1000
         move.l  d4, -(sp)
         move.l  d5, -(sp)
         move.l  Char_ImageData, -(sp)
-        JSR     DRAW_CHARACTER
+        JSR     DRAW_PHYSICS_BODY
         add.l   #12, sp
 
         lea     GameDescription, a1
@@ -232,7 +232,7 @@ GAME_LOOP:
         move.l  (a1), -(sp)
         move.l  4(a1), -(sp)
         move.l  Box_ImageData, -(sp)
-        JSR     DRAW_CHARACTER
+        JSR     DRAW_PHYSICS_BODY
         add.l   #12, sp
         move.l  Char_CurX, d4
         move.l  Char_CurY, d5
@@ -274,7 +274,7 @@ GAME_LOOP:
         move.l  d4, -(sp)
         move.l  d5, -(sp)
         move.l  Char_ImageData, -(sp)
-        JSR     DRAW_CHARACTER
+        JSR     DRAW_PHYSICS_BODY
         add.l   #12, sp
                 
     REPAINT_FRAME:        
@@ -471,7 +471,7 @@ GET_TIME_DIFF:
 *********************************************************************
 
 *-------------------
-* Subroutine : Draws the specified clipping rectangle
+* Draws the specified clipping rectangle
 * Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) bottom-right-x, (LONG) bottom-right-y (order to push onto stack)
 *              52(sp), 48(sp), 44(sp), 40(sp)
 *-------------------
@@ -488,17 +488,17 @@ GET_TIME_DIFF:
 *-------------------
 SR_DRAW_CLIP_RECTANGLE:
 
-        movem.l ALL_BMP_DRAW_REGS, -(sp)         ; store the register values in stack
+        movem.l REG_DRAW_BMP, -(sp)         ; store the register values in stack
 
         move.l  BG_ImageData, a0
                 
         move.l  BG_Height, d2
-        sub.l   48(sp), d2
+        sub.l   PARAM_BMP_UY(sp), d2
         subi.l  #1, d2
         
         move.l  BG_WIDTH, d5
         
-        move.l  52(sp), d3              ; top-left-x to d3
+        move.l  PARAM_BMP_LX(sp), d3              ; top-left-x to d3
         move.l  d3, d7
         add.l   d3, d7
         add.l   d3, d7
@@ -507,7 +507,7 @@ SR_DRAW_CLIP_RECTANGLE:
         mulu    d2, d4                  ; y offset (row offset)
         move.l  d4, d6      
         add.l   d7, d6                  ; offset (in bytes) of pixel to be drawn from the image data
-        move.l  48(sp), d2
+        move.l  PARAM_BMP_UY(sp), d2
 
     CONTINUE_ROW:
         clr.l   d1
@@ -528,23 +528,23 @@ SR_DRAW_CLIP_RECTANGLE:
         addi.l  #1, d3                  ; increment X coordinate
         addi.l  #3, d6
         
-        cmp.l   44(sp), d3
+        cmp.l   PARAM_BMP_RX(sp), d3
         blt     CONTINUE_ROW
         
         sub.l   d5, d4                  ; update row pointer to to previous row (current = current - NumBytesPerRow)
         move.l  d4, d6                  
         add.l   d7, d6
-        move.l  52(sp), d3              ; reset X coordinate
+        move.l  PARAM_BMP_LX(sp), d3              ; reset X coordinate
         addi.l  #1, d2
-        cmp.l   40(sp), d2
+        cmp.l   PARAM_BMP_LY(sp), d2
         blt     CONTINUE_ROW
 
-        movem.l (sp)+, ALL_BMP_DRAW_REGS
+        movem.l (sp)+, REG_DRAW_BMP
         RTS
 
 *-------------------
-* Subroutine : Draws the character at given offset
-* Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) address of image data to draw (order to push onto stack)
+* Draws the physics bodies (box and character) at given offset
+* Parameteres: (LONG) top-left-x, (LONG) top-left-y, (LONG) address of image data to draw
 *-------------------
 *-------------------
 * a0 : address of image data
@@ -557,10 +557,10 @@ SR_DRAW_CLIP_RECTANGLE:
 * d6 : pixel offset
 * d7 : offset of the number of bytes in a row
 *-------------------
-DRAW_CHARACTER:
-        movem.l ALL_BMP_DRAW_REGS, -(sp)         ; store the register values in stack
+DRAW_PHYSICS_BODY:
+        movem.l REG_DRAW_BMP, -(sp)         ; store the register values in stack
 
-        move.l  BMP_TO_DRAW(sp), a0
+        move.l  PARAM_BMP_TO_DRAW(sp), a0
                 
         move.l  Char_Height, d2
         subi.l  #1, d2
@@ -569,22 +569,22 @@ DRAW_CHARACTER:
         
         move.l  d5, d6
         mulu    d2, d6
-        move.l  LEFT_X_PARAM(sp), d3              ; top-left-x to d3
-        move.l  TOP_Y_PARAM(sp), d2              ; top-left-y to d2
+        move.l  PARAM_BMP_LEFT_X(sp), d3    ; top-left-x to d3
+        move.l  PARAM_BMP_TOP_Y(sp), d2     ; top-left-y to d2
         move.l  d3, d4
         add.l   Char_ActualWidth, d4
         move.l  d2, d7
         add.l   Char_ActualWidth, d7
         add.l   d5, d5                  
         
-    CONTINUE_CHAR_ROW:
+    CONTINUE_BODY_ROW:
         clr.l   d1
         
-        move.b  (a0, d6.l), d1          ; #$000000BB
-        swap    d1                      ; #$00BB0000
-        move.b  1(a0, d6.l), d1         ; #$00BB00GG
-        lsl.w   #8, d1                  ; #$00BBGG00
-        move.b  2(a0, d6.l), d1         ; #$00BBGGRR
+        move.b  (a0, d6.l), d1              ; #$000000BB
+        swap    d1                          ; #$00BB0000
+        move.b  1(a0, d6.l), d1             ; #$00BB00GG
+        lsl.w   #8, d1                      ; #$00BBGG00
+        move.b  2(a0, d6.l), d1             ; #$00BBGGRR
         
         cmp.l   #$00FFFFFF, d1
         beq     INCREMENT_INDEX
@@ -595,23 +595,23 @@ DRAW_CHARACTER:
         move.l  #CMD_DRAW_PIXEL, d0
         TRAP    #15
     INCREMENT_INDEX:
-        addi.l  #1, d3                  ; increment X coordinate
+        addi.l  #1, d3                      ; increment X coordinate
         addi.l  #3, d6
         
         cmp.l   d4, d3
-        blt     CONTINUE_CHAR_ROW
+        blt     CONTINUE_BODY_ROW
         
-        sub.l   d5, d6                  ; update row pointer to to previous row (current = current - NumBytesPerRow)
-        move.l  LEFT_X_PARAM(sp), d3              ; reset X coordinate
+        sub.l   d5, d6                      ; update row pointer to to previous row (current = current - NumBytesPerRow)
+        move.l  PARAM_BMP_LEFT_X(sp), d3    ; reset X coordinate
         addi.l  #1, d2
-        cmp.l   d7, d2                  ; char width = char height
-        blt     CONTINUE_CHAR_ROW
+        cmp.l   d7, d2                      ; char width = char height
+        blt     CONTINUE_BODY_ROW
         
-        movem.l (sp)+, ALL_BMP_DRAW_REGS
+        movem.l (sp)+, REG_DRAW_BMP
         RTS
 
 *-------------------
-* Subroutine: Processes the header of the background image bitmap and saves the required data in memory
+* Processes the header of the background image bitmap and saves the required data in memory
 *-------------------
 PROCESS_BACKGROUND_BITMAP:
 
@@ -627,6 +627,8 @@ PROCESS_BACKGROUND_BITMAP:
         
         move.l  ImageWidth, d5
         JSR     SWAP_LONG
+        
+        * calculating number of bytes per row
         mulu    #BitsPerPixel, d5
         addi.l  #31, d5
         lsr.l   #5, d5                  ; d5 = d5 / 32
@@ -635,7 +637,7 @@ PROCESS_BACKGROUND_BITMAP:
         RTS
 
 *-------------------
-* Subroutine: Processes the header of the character image bitmap and saves the required data in memory
+* Processes the header of the character image bitmap and saves the required data in memory
 *-------------------
 PROCESS_CHARACTER_BITMAP:
 
@@ -650,7 +652,9 @@ PROCESS_CHARACTER_BITMAP:
         move.l  d5, Char_Height
         
         move.l  CharImageWidth, d5
-        JSR     SWAP_LONG        
+        JSR     SWAP_LONG
+        
+        * calculating number of bytes per row
         mulu    #BitsPerPixel, d5
         addi.l  #31, d5
         lsr.l   #5, d5                  ; d5 = d5 / 32
@@ -659,7 +663,7 @@ PROCESS_CHARACTER_BITMAP:
         RTS
         
 *-------------------
-* Subroutine: Processes the header of the box image bitmap and saves the required data in memory
+* Processes the header of the box image bitmap and saves the required data in memory
 *-------------------
 PROCESS_BOX_BITMAP:
 
@@ -674,22 +678,27 @@ PROCESS_BOX_BITMAP:
         move.l  d5, Box_Height
         
         move.l  BoxImageWidth, d5
-        JSR     SWAP_LONG        
+        JSR     SWAP_LONG
+        
+        * calculating number of bytes per row
         mulu    #BitsPerPixel, d5
-        addi.l  #31, d5
+        addi.l  #31, d5                 
         lsr.l   #5, d5                  ; d5 = d5 / 32
         lsl.l   #2, d5                  ; d5 = d5 * 4
         move.l  d5, Box_Width
         RTS
         
 *-------------------
-* Subroutine: Copies the double buffer to the main screen
+* Copies the double buffer to the main screen
 *-------------------
 REPAINT:
         move.b  #CMD_REPAINT, d0
         TRAP    #15
         RTS
         
+*-------------------
+* Removes all graphics from the screen
+*-------------------        
 CLEAR_SCREEN:
         move.w  #$FF00, d1
         move.b  #CMD_CLEAR_SCREEN, d0
@@ -707,6 +716,7 @@ CLEAR_SCREEN:
 UPDATE_MAP:
         movem.l REG_UPDATE_MAP, -(sp)
         lea     GameMap, a1
+        
         move.l  PARAM_PTR_BOX_OBJ(sp), a2
         move.l  BOX_OLD_X(a2), -(sp)
         move.l  BOX_OLD_Y(a2), -(sp)
@@ -719,6 +729,7 @@ UPDATE_MAP:
         JSR     GET_MAP_STATUS
         add.l   #SIZE_OF_GET_MAP_STATUS_PARAMS, sp
         move.l  a2, (a1, d3)                        ; set pointer of box to current cell
+        
         movem.l (sp)+, REG_UPDATE_MAP
         RTS
 
@@ -742,6 +753,7 @@ GET_MAP_STATUS:
 *-------------------
 GET_TOP_BOX_OF_COLUMN:
         movem.l a0, -(sp)
+        
         move.l  PARAM_COLUMN_NUMBER(sp), d3
         lsl.l   #2, d3                  ; multiply by 4 to get offset in GameMap
         lea     GameMap, a0
@@ -764,6 +776,7 @@ GET_TOP_BOX_OF_COLUMN:
     GOT_TOP:
         lsl.l   #5, d3                  ; multiply column number by 32 to get max possible y value for fall
         subi.l  #GRID_HEIGHT, d3
+        
         movem.l (sp)+, a0
         RTS
         
@@ -773,22 +786,28 @@ GET_TOP_BOX_OF_COLUMN:
 ADD_BOX:
         cmpi.w  #MAX_BOXES, NumBoxes
         bge     NO_MORE_BOXES
+        
         movem.l REG_ADD_BOX, -(sp)
+        
         move.l  LastBox, a0
         JSR     GENERATE_RANDOM_MOD_20      ; generate a random column number to add the box to
         move.l  RandomColumn, d0
+        
     CHECK_IF_COL_IS_FULL:                   ; if that column is already stacked full with boxes, goto next column until you find an empty slot
         move.l  d0, -(sp)
         move.l  #0, -(sp)
         JSR     GET_TOP_BOX_OF_COLUMN
         add.l   #SIZE_OF_GET_TOP_BOX_PARAMS, sp
+        
         cmpi.l  #MIN_STACKED_BOX_Y, d3
         bgt     ADD_TO_CURRENT_COL
         addi.b  #1, d0
+        
         cmpi.b  #MAP_ROWS, d0
         blt     CHECK_IF_COL_IS_FULL
         move.b  #0, d0
         bra     CHECK_IF_COL_IS_FULL
+    
     ADD_TO_CURRENT_COL:
         lsl.w   #5, d0                      ; multiply column with 32 i.e. GRID_WIDTH
         move.l  d0, (a0)+                   ; current X
@@ -798,12 +817,15 @@ ADD_BOX:
         move.l  #0, (a0)+                   ; Y velocity
         move.b  #0, (a0)+                   ; isFalling
         move.b  #0, (a0)+                   ; isPickedUp
+        
         move.l  a0, LastBox
         addi.w  #1, NumBoxes
+        
         move.w  #0, -(sp)                   ; padding to make an even boundary in stack
         move.w  NumBoxes, -(sp)
         JSR     DRAW_SCORE
         add.l   #SIZE_OF_DRAW_SCORE_PARAMS, sp
+        
         movem.l (sp)+, REG_ADD_BOX
     NO_MORE_BOXES:
         RTS
@@ -1237,10 +1259,6 @@ CopyOfPrevTime      dc.l    0
 *-------------------
 * Graphics pipeline
 *-------------------
-LEFT_X_PARAM            EQU     48
-TOP_Y_PARAM             EQU     44
-BMP_TO_DRAW             EQU     40
-
 Char_CurX               dc.l    Char_StartX
 Char_CurY               dc.l    Char_StartY
 Char_OldX               dc.l    Char_StartX
@@ -1308,6 +1326,15 @@ PARAM_GET_MAP_STATUS_X  EQU     8
 PARAM_GET_MAP_STATUS_Y  EQU     4
 
 PARAM_PTR_BOX_OBJ       EQU     20
+
+PARAM_BMP_LEFT_X        EQU     48
+PARAM_BMP_TOP_Y         EQU     44
+PARAM_BMP_TO_DRAW       EQU     40
+
+PARAM_BMP_LX            EQU     52
+PARAM_BMP_UY            EQU     48
+PARAM_BMP_RX            EQU     44
+PARAM_BMP_LY            EQU     40
 *-------------------
 * Size of Paramerters of a Subroutine
 *-------------------
